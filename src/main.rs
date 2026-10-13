@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod demo;
+mod mcp;
 mod model;
 mod sync;
 mod ui;
@@ -8,7 +9,7 @@ use model::*;
 use std::io::{self, Write};
 use std::process::Command;
 
-const HELP: &str = "skillz - one place for agent skills & plugins (Claude Code, Codex, omp, OpenCode, Gemini CLI)
+const HELP: &str = "skillz - one place for agent skills, plugins & MCP servers (Claude Code, Codex, omp, OpenCode, Gemini CLI)
 
 USAGE
   skillz                         open the TUI
@@ -18,9 +19,12 @@ USAGE
   skillz enable  <name> [agent…] make it visible (default: every agent)
   skillz disable <name> [agent…] hide it (default: every agent)
   skillz rm <name> [-y]          remove it completely: hub, every agent, configs, caches
+  skillz mcp add <name> <url | command [args…]>
+                                 add an MCP server to every agent
 
   agents: claude codex omp opencode gemini
-  <name> is a skill name or a plugin id (plugin@marketplace); a bare plugin name works if unique.";
+  <name> is a skill name, a plugin id (plugin@marketplace) or mcp:<server>;
+  a bare plugin or server name works if unique.";
 
 /// Run commands with the terminal attached; true if all succeeded.
 pub fn run_cmds(cmds: &[Vec<String>]) -> bool {
@@ -46,10 +50,17 @@ fn find<'a>(entries: &'a [Entry], name: &str) -> Result<&'a Entry, String> {
     if let Some(e) = entries.iter().find(|e| e.id == name) {
         return Ok(e);
     }
-    let hits: Vec<&Entry> = entries.iter().filter(|e| e.kind == Kind::Plugin && e.plugin_name() == name).collect();
+    let hits: Vec<&Entry> = entries
+        .iter()
+        .filter(|e| match e.kind {
+            Kind::Plugin => e.plugin_name() == name,
+            Kind::Mcp => mcp::name_of(&e.id) == name,
+            Kind::Skill => false,
+        })
+        .collect();
     match hits.len() {
         1 => Ok(hits[0]),
-        0 => Err(format!("no skill or plugin named '{name}' (see `skillz list`)")),
+        0 => Err(format!("no skill, plugin or MCP server named '{name}' (see `skillz list`)")),
         _ => Err(format!("'{name}' is ambiguous: {}", hits.iter().map(|e| e.id.as_str()).collect::<Vec<_>>().join(", "))),
     }
 }
@@ -80,6 +91,7 @@ fn main() {
         Some("update") => update(),
         Some(c @ ("enable" | "disable")) => toggle_cmd(c == "enable", &args[1..]),
         Some("rm" | "remove") => rm(&args[1..]),
+        Some("mcp") if args.get(1).map(String::as_str) == Some("add") => mcp_add(&args[2..]),
         Some(other) => Err(io::Error::other(format!("unknown command '{other}'\n\n{HELP}"))),
     };
     if let Err(e) = res {
@@ -98,7 +110,12 @@ fn list() -> io::Result<()> {
     }
     println!();
     for e in &entries {
-        print!("{:<w$}  {:<6}", e.id, if e.kind == Kind::Skill { "skill" } else { "plugin" });
+        let kind = match e.kind {
+            Kind::Skill => "skill",
+            Kind::Plugin => "plugin",
+            Kind::Mcp => "mcp",
+        };
+        print!("{:<w$}  {:<6}", e.id, kind);
         for p in &cx.agents {
             print!(" {:^8}", mark(e.vis.get(p)));
         }
@@ -182,5 +199,21 @@ fn rm(args: &[String]) -> io::Result<()> {
     cx.save()?;
     let ok = run_cmds(&cmds);
     println!("{} removed {}", if ok { "✓" } else { "⚠" }, e.id);
+    Ok(())
+}
+
+fn mcp_add(args: &[String]) -> io::Result<()> {
+    let name = args.first().ok_or_else(|| io::Error::other("usage: skillz mcp add <name> <url | command [args…]>"))?;
+    let mut cx = Ctx::load();
+    if load_entries(&cx).iter().any(|e| e.id == format!("{}{name}", mcp::PREFIX)) {
+        return Err(io::Error::other(format!("MCP server '{name}' already exists; `skillz enable mcp:{name}` spreads it")));
+    }
+    let e = mcp::new_entry(name, &args[1..])?;
+    for p in cx.agents.clone() {
+        set(&mut cx, &e, p, true, false)?;
+        println!("● {} → {}", e.id, p.name());
+    }
+    cx.save()?;
+    println!("restart the agents to apply; servers that use OAuth need a login in each agent");
     Ok(())
 }

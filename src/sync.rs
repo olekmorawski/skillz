@@ -60,6 +60,23 @@ pub fn sync(cx: &mut Ctx, apply: bool) -> io::Result<Report> {
                 }
             }
             Kind::Plugin => {}
+            // an MCP server on somewhere reaches every agent that has no definition of it yet
+            Kind::Mcp if e.vis.values().any(|v| *v == Vis::On) => {
+                let portable = e.mcp.get(&P::Claude).or_else(|| e.mcp.values().next()).is_some_and(crate::mcp::portable);
+                for &p in &cx.agents.clone() {
+                    if e.vis.get(&p) == Some(&Vis::Off) && !cx.is_off(p, &e.id) && crate::mcp::absent(cx, e, p) {
+                        if !portable {
+                            lines.push(format!("{}: not copied to {} (command is relative or missing here)", e.id, p.name()));
+                            continue;
+                        }
+                        lines.push(format!("{}: add to {}", e.id, p.name()));
+                        if apply {
+                            set(cx, e, p, true, false)?;
+                        }
+                    }
+                }
+            }
+            Kind::Mcp => {}
         }
     }
 

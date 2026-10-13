@@ -77,6 +77,7 @@ pub enum Vis {
 pub enum Kind {
     Skill,
     Plugin,
+    Mcp,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -102,6 +103,7 @@ pub struct Entry {
     pub claude_cmd: Option<String>,  // `source-command-*` skills map to ~/.claude/commands/<cmd>
     pub modes: BTreeMap<P, Mode>,    // plugins only
     pub omp_native: bool,
+    pub mcp: BTreeMap<P, Value>,     // MCP only: canonical definition per agent that has one
 }
 
 impl Entry {
@@ -121,6 +123,9 @@ pub struct Ctx {
     pub gemini: Value,
     pub opencode: Option<Value>, // None when opencode.json can't be parsed as plain JSON
     pub claude: Value,
+    pub claude_json: Value, // ~/.claude.json, for `mcpServers`
+    pub claude_mcp_rm: BTreeSet<String>, // purged servers to drop from Claude's project scopes too
+    pub omp_mcp: Value,
     pub state: Value,
     dirty: BTreeSet<&'static str>,
     omp_ignored_orig: BTreeSet<String>,
@@ -178,6 +183,9 @@ impl Ctx {
             omp_reg: read_json(&home.join(".omp/plugins/installed_plugins.json")),
             gemini: read_json(&home.join(".gemini/settings.json")),
             claude: read_json(&home.join(".claude/settings.json")),
+            claude_json: read_json(&home.join(".claude.json")),
+            claude_mcp_rm: BTreeSet::new(),
+            omp_mcp: read_json(&home.join(".omp/agent/mcp.json")),
             opencode,
             state,
             dirty: BTreeSet::new(),
@@ -212,12 +220,42 @@ impl Ctx {
                 cur["skills"] = json!({});
             }
             cur["skills"]["disabled"] = self.gemini["skills"]["disabled"].clone();
+            for k in ["mcpServers", "mcp"] {
+                if !self.gemini[k].is_null() {
+                    cur[k] = self.gemini[k].clone();
+                }
+            }
             write_json(&h.join(".gemini/settings.json"), &cur)?;
         }
         if self.dirty.contains("opencode") {
             if let Some(v) = &self.opencode {
                 write_json(&h.join(".config/opencode/opencode.json"), v)?;
             }
+        }
+        if self.dirty.contains("claude_json") {
+            // Claude Code rewrites this file all the time: re-read, change only MCP keys, swap in atomically
+            let p = h.join(".claude.json");
+            // never replace the whole file with a partial view: an unreadable file means abort
+            let mut cur: Value = match fs::read_to_string(&p) {
+                Ok(t) => serde_json::from_str(&t).map_err(|e| io::Error::other(format!("~/.claude.json is mid-write or broken ({e}); try again")))?,
+                Err(e) if e.kind() == io::ErrorKind::NotFound => json!({}),
+                Err(e) => return Err(e),
+            };
+            if !self.claude_json["mcpServers"].is_null() {
+                cur["mcpServers"] = self.claude_json["mcpServers"].clone();
+            }
+            for proj in cur["projects"].as_object_mut().into_iter().flat_map(|m| m.values_mut()) {
+                if let Some(m) = proj["mcpServers"].as_object_mut() {
+                    m.retain(|k, _| !self.claude_mcp_rm.contains(k));
+                }
+            }
+            let tmp = h.join(".claude.json.skillz-tmp");
+            write_json(&tmp, &cur)?;
+            fs::rename(&tmp, &p)?;
+            self.claude_mcp_rm.clear();
+        }
+        if self.dirty.contains("omp_mcp") {
+            write_json(&h.join(".omp/agent/mcp.json"), &self.omp_mcp)?;
         }
         if self.dirty.contains("omp_reg") {
             write_json(&h.join(".omp/plugins/installed_plugins.json"), &self.omp_reg)?;
@@ -234,7 +272,7 @@ impl Ctx {
         Ok(())
     }
 
-    fn touch(&mut self, what: &'static str) {
+    pub(crate) fn touch(&mut self, what: &'static str) {
         self.dirty.insert(what);
     }
 
@@ -542,6 +580,7 @@ pub fn load_entries(cx: &Ctx) -> Vec<Entry> {
             claude_cmd,
             modes: BTreeMap::new(),
             omp_native: false,
+            mcp: BTreeMap::new(),
         });
     }
 
@@ -607,9 +646,11 @@ pub fn load_entries(cx: &Ctx) -> Vec<Entry> {
                 claude_cmd: None,
                 modes,
                 omp_native: cx.omp_reg["plugins"][pid].as_array().is_some_and(|es| es.iter().any(|e| e["skillz"] != json!(true))),
+                mcp: BTreeMap::new(),
             });
         }
     }
+    out.extend(crate::mcp::load(cx));
     mark_dups(&mut out);
     out
 }
@@ -656,6 +697,7 @@ pub fn set(cx: &mut Ctx, e: &Entry, p: P, on: bool, remember: bool) -> io::Resul
         (_, _) if e.vis.get(&p) == Some(&Vis::Always) => {
             return Err(io::Error::other(format!("{} always loads ~/.agents/skills and has no per-skill switch", p.name())));
         }
+        (_, Kind::Mcp) => crate::mcp::set(cx, e, p, on)?,
         (P::Claude, Kind::Skill) => {
             if let Some(cmd) = &e.claude_cmd {
                 let (live, parked) = (h.join(".claude/commands").join(cmd), h.join(DISABLED).join("claude-commands").join(cmd));
@@ -822,6 +864,7 @@ pub fn purge(cx: &mut Ctx, e: &Entry) -> io::Result<Cmds> {
             let (pname, mkt) = e.id.rsplit_once('@').unwrap_or((&e.id, ""));
             cmds.push(sv(&["rm", "-rf", &h.join(".claude/plugins/cache").join(mkt).join(pname).to_string_lossy()]));
         }
+        Kind::Mcp => crate::mcp::purge(cx, e),
     }
     cx.forget(&e.id);
     Ok(cmds)
@@ -831,7 +874,7 @@ pub fn update_cmds(cx: &Ctx, e: &Entry) -> Cmds {
     match e.kind {
         Kind::Skill if e.in_lock => vec![sv(&["npx", "-y", "skills", "update", &e.id, "-g", "-y"])],
         Kind::Skill if e.path.join(".git").exists() => vec![sv(&["git", "-C", &e.path.to_string_lossy(), "pull", "--ff-only"])],
-        Kind::Skill => vec![],
+        Kind::Skill | Kind::Mcp => vec![],
         Kind::Plugin => {
             let mut v = vec![sv(&["claude", "plugin", "update", &e.id])];
             if e.omp_native && cx.agents.contains(&P::Omp) {

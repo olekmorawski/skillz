@@ -2,7 +2,7 @@
 
 # ✻ skillz
 
-**One TUI for every agent's skills and plugins.**
+**One TUI for every agent's skills, plugins and MCP servers.**
 See, switch, update and remove them across **Claude Code**, **Codex**, **omp**, **OpenCode** and **Gemini CLI** without hand-editing five config formats.
 
 <img src="docs/screenshot.svg" alt="skillz TUI: skills and plugins with per-agent visibility" width="100%">
@@ -15,6 +15,8 @@ See, switch, update and remove them across **Claude Code**, **Codex**, **omp**, 
 
 Every coding agent loads skills from its own folders and turns them off in its own config format. Claude Code uses symlinks and `enabledPlugins`. Codex uses `[[skills.config]]` in TOML. omp uses `ignoredSkills` and its own plugin registry. Gemini uses `skills.disabled`. OpenCode uses its `plugin` list.
 
+MCP servers are worse: five config formats (JSON, TOML, `command` as a string or an array, `url` vs `httpUrl`).
+
 Install a skill in one place and some agents see it while others don't. Install a plugin twice from two marketplaces and you get duplicates. `skillz` puts all of it in one table:
 
 ```
@@ -22,6 +24,7 @@ NAME                 Claude  Codex  omp  OpenCode  Gemini
 ◇ brainstorming        ●       ●     ●      ◆        ●
 ◇ pdf-tools            ●       ●     ●      ◆        ○
 ▣ ponytail@ponytail    ●       ●     ●      ●        ●
+⌁ playwright           ●       ●     ●      ●        ○
 ```
 
 Press `1`–`5` to switch an agent on or off for the selected row. `skillz` writes the change into that agent's own config. It doesn't keep a database and doesn't copy files.
@@ -73,6 +76,20 @@ Then run `skillz`.
 | **OpenCode** | ◆ always on: OpenCode v2 always loads `~/.agents/skills` and has no per-skill switch | `plugin` list in `~/.config/opencode/opencode.json`, or links removed |
 | **Gemini CLI** | `skills.disabled` in `~/.gemini/settings.json` | links removed from `~/.gemini/skills` |
 
+### MCP servers
+
+A server is one row, whatever agents define it. `skillz sync` copies a server that is on in one agent into every agent that doesn't have it yet, converted to that agent's format. Servers whose command is a relative path or missing on this machine are not copied.
+
+| Agent | Where it lives | Off |
+|---|---|---|
+| **Claude Code** | `mcpServers` in `~/.claude.json` | no switch exists, so the entry is parked in `~/.agents/skillz.json` and put back on |
+| **Codex** | `[mcp_servers.<name>]` in `~/.codex/config.toml` | `enabled = false` |
+| **omp** | `~/.omp/agent/mcp.json`, plus everything Claude has | `disabledServers` |
+| **OpenCode** | `mcp.servers` in `~/.config/opencode/opencode.json` | `disabled: true` |
+| **Gemini CLI** | `mcpServers` in `~/.gemini/settings.json` | `mcp.excluded` |
+
+Not covered: connectors you add on claude.ai (they live in your account, not in a file) and servers that come with a plugin (they follow the plugin). OAuth logins are per agent, so a server that needs one asks in each agent once (omp: `/mcp reauth <name>`, OpenCode: `opencode mcp auth <name>`).
+
 Choices you make are remembered in `~/.agents/skillz.json`, so `skillz sync` never switches something back on after you turned it off.
 
 ## TUI
@@ -84,12 +101,12 @@ Choices you make are remembered in `~/.agents/skillz.json`, so `skillz sync` nev
 | `u` / `U` | update the selected row / update everything |
 | `s` | sync (link new skills, follow plugins to every agent, clean broken links) |
 | `d` | **remove completely** (see below) |
-| `tab` `←` `→` | All / Skills / Plugins |
+| `tab` `←` `→` | All / Skills / Plugins / MCP |
 | `/` | filter by name, source or description; `esc` clears |
 | `↑↓` `j k` `g G` `PgUp PgDn` | move |
 | `r` / `q` | reload / quit |
 
-Symbols: `●` visible · `○` hidden · `◆` always visible (the agent has no switch) · `·` doesn't apply (e.g. an LSP-only plugin has nothing Gemini can load) · `⚠` duplicate.
+Symbols: `◇` skill · `▣` plugin · `⌁` MCP server · `●` visible · `○` hidden · `◆` always visible (the agent has no switch) · `·` doesn't apply (e.g. an LSP-only plugin has nothing Gemini can load) · `⚠` duplicate.
 
 ## CLI
 
@@ -101,15 +118,19 @@ skillz update                       # npx skills update, claude/codex/omp plugin
 skillz enable  pdf-tools            # every agent
 skillz disable pdf-tools gemini     # just Gemini
 skillz rm brainstorming             # remove completely (asks first; -y to skip)
+skillz mcp add linear https://mcp.linear.app/mcp     # add an MCP server to every agent
+skillz mcp add playwright npx @playwright/mcp@latest
+skillz disable mcp:playwright gemini
 ```
 
-Plugins are addressed by id (`ponytail@ponytail`) or by bare name when it's unique.
+Plugins are addressed by id (`ponytail@ponytail`) or by bare name when it's unique. MCP servers are `mcp:<name>`, or the bare name when no skill has it.
 
 ### `rm`: remove completely
 
 `skillz rm` (or `d` in the TUI) removes the item from everywhere, not just one agent:
 
 - **Skill:** the hub folder and its `npx skills` lock entry, every agent's copy or symlink (`~/.claude`, `~/.codex`, `~/.gemini`, `~/.config/opencode`, `~/.omp`, `~/.pi`), parked copies, and every on/off rule that mentions it.
+- **MCP server:** its entry in every agent's config, Claude's project scopes, parked copies and every on/off rule.
 - **Plugin:** the Claude Code install and all cached versions, the Codex plugin, omp entries, the OpenCode plugin entry, every `<plugin>--*` link, `enabledPlugins` and remembered choices.
 
 ## Duplicates
@@ -121,7 +142,7 @@ The same plugin from two marketplaces, or a hub skill that a plugin also ships, 
 - Restart an agent after switching it. Agents read their skill lists at startup. OpenCode runs a background service that rescans after a few seconds.
 - OpenCode v2 offers no way to hide a single skill that comes from `~/.agents/skills`, so those rows show `◆`.
 - Plugins that only ship LSP servers, agents or hooks show `·` for Gemini and OpenCode, because those agents can only load a plugin's skills.
-- `skillz` only edits the keys it owns. Claude's `settings.json` and Gemini's `settings.json` are re-read before writing, so other settings survive. An `opencode.json` with comments (JSONC) is left alone and you get a message instead.
+- `skillz` only edits the keys it owns. Claude's `settings.json`, `~/.claude.json` and Gemini's `settings.json` are re-read before writing, so other settings survive. `~/.claude.json` is replaced atomically, and if it can't be read the write is skipped rather than risk the file. An `opencode.json` with comments (JSONC) is left alone and you get a message instead.
 - An agent column appears when its home exists: `~/.claude`, `~/.codex`, `~/.omp`, `~/.config/opencode`, `~/.gemini`.
 
 ## Development

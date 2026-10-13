@@ -13,7 +13,7 @@ fn skill(dir: &Path, name: &str, desc: &str) {
     w(&dir.join(name).join("SKILL.md"), &format!("---\nname: {name}\ndescription: {desc}\n---\n\n# {name}\n\n{desc}\n\n## When to use\n\n- {desc}\n- Keep it short and concrete.\n"));
 }
 
-/// A fake $HOME with five agents, hub skills and two plugins.
+/// A fake $HOME with five agents, hub skills, two plugins and two MCP servers.
 pub fn fixture(h: &Path) {
     let _ = fs::remove_dir_all(h);
     let hub = h.join(".agents/skills");
@@ -51,7 +51,8 @@ pub fn fixture(h: &Path) {
     }}).to_string());
     w(&h.join(".claude/plugins/known_marketplaces.json"), r#"{"ponytail":{"source":{"source":"github","repo":"DietrichGebert/ponytail"}},"claude-plugins-official":{"source":{"source":"github","repo":"anthropics/claude-plugins-official"}}}"#);
     w(&h.join(".claude/settings.json"), r#"{"enabledPlugins":{"ponytail@ponytail":true,"rust-analyzer-lsp@claude-plugins-official":true}}"#);
-    w(&h.join(".codex/config.toml"), "[marketplaces.ponytail]\nsource_type = \"git\"\nsource = \"https://github.com/DietrichGebert/ponytail.git\"\n\n[plugins.\"ponytail@ponytail\"]\nenabled = true\n\n[[skills.config]]\nname = \"frontend-taste\"\nenabled = false\n");
+    w(&h.join(".codex/config.toml"), "[marketplaces.ponytail]\nsource_type = \"git\"\nsource = \"https://github.com/DietrichGebert/ponytail.git\"\n\n[plugins.\"ponytail@ponytail\"]\nenabled = true\n\n[[skills.config]]\nname = \"frontend-taste\"\nenabled = false\n\n[mcp_servers.playwright]\ncommand = \"npx\"\nargs = [\"@playwright/mcp@latest\"]\n");
+    w(&h.join(".claude.json"), r#"{"mcpServers":{"playwright":{"type":"stdio","command":"npx","args":["@playwright/mcp@latest"]},"linear":{"type":"http","url":"https://mcp.linear.app/mcp"}}}"#);
     fs::create_dir_all(h.join(".omp/agent")).unwrap();
     w(&h.join(".config/opencode/opencode.json"), r#"{"plugin":[]}"#);
     w(&h.join(".gemini/settings.json"), r#"{"skills":{"disabled":["pdf-tools"]}}"#);
@@ -145,7 +146,7 @@ fn screenshot() {
     let out = std::env::var("SKILLZ_SVG").unwrap_or_else(|_| "docs/screenshot.svg".into());
     fs::create_dir_all(Path::new(&out).parent().unwrap()).unwrap();
     fs::write(&out, svg(t.backend().buffer())).unwrap();
-    // the demo must load like a real machine: 7 skills, 2 plugins, all five agents
-    assert_eq!(app.entries.len(), 9);
+    // the demo must load like a real machine: 7 skills, 2 plugins, 2 MCP servers, all five agents
+    assert_eq!(app.entries.len(), 11);
     assert_eq!(app.cx.agents.len(), 5);
 }

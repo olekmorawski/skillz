@@ -21,7 +21,8 @@ const BAD: Color = Color::Rgb(235, 100, 100);
 const WARN: Color = Color::Rgb(240, 190, 90);
 const SKILL_C: Color = Color::Rgb(110, 180, 230);
 const PLUGIN_C: Color = Color::Rgb(220, 140, 220);
-const TABS: [&str; 3] = ["All", "Skills", "Plugins"];
+const MCP_C: Color = Color::Rgb(130, 210, 190);
+const TABS: [&str; 4] = ["All", "Skills", "Plugins", "MCP"];
 
 fn pcolor(p: P) -> Color {
     match p {
@@ -58,6 +59,7 @@ impl App {
                 let tab_ok = match self.tab {
                     1 => e.kind == Kind::Skill,
                     2 => e.kind == Kind::Plugin,
+                    3 => e.kind == Kind::Mcp,
                     _ => true,
                 };
                 tab_ok && (f.is_empty() || e.id.to_lowercase().contains(&f) || e.source.to_lowercase().contains(&f) || e.desc.to_lowercase().contains(&f))
@@ -100,6 +102,14 @@ fn dot(v: Option<&Vis>, p: P) -> Span<'static> {
     }
 }
 
+fn kind_glyph(k: Kind) -> (&'static str, Color) {
+    match k {
+        Kind::Skill => ("◇", SKILL_C),
+        Kind::Plugin => ("▣", PLUGIN_C),
+        Kind::Mcp => ("⌁", MCP_C),
+    }
+}
+
 fn chip(key: &str, label: &str) -> Vec<Span<'static>> {
     vec![
         Span::styled(format!(" {key} "), Style::new().bg(CHIP_BG).fg(Color::White).bold()),
@@ -114,8 +124,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     // header
     let skills = app.entries.iter().filter(|e| e.kind == Kind::Skill).count();
-    let plugins = app.entries.len() - skills;
-    let mut title = vec![Span::styled("✻ skillz", Style::new().fg(ACCENT).bold()), Span::styled("  skills & plugins for ", Style::new().fg(DIM))];
+    let plugins = app.entries.iter().filter(|e| e.kind == Kind::Plugin).count();
+    let mcps = app.entries.len() - skills - plugins;
+    let mut title = vec![Span::styled("✻ skillz", Style::new().fg(ACCENT).bold()), Span::styled("  skills, plugins & MCP for ", Style::new().fg(DIM))];
     for (i, p) in agents.iter().enumerate() {
         if i > 0 {
             title.push(Span::styled(" · ", Style::new().fg(FAINT)));
@@ -124,7 +135,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
     f.render_widget(Paragraph::new(Line::from(title)), head);
     let dups = app.entries.iter().filter(|e| !e.dups.is_empty()).count();
-    let mut right = vec![Span::styled(format!("{skills} skills · {plugins} plugins"), Style::new().fg(DIM))];
+    let mut right = vec![Span::styled(format!("{skills} skills · {plugins} plugins · {mcps} mcp"), Style::new().fg(DIM))];
     if dups > 0 {
         right.push(Span::styled(format!("  ⚠ {dups} duplicates"), Style::new().fg(WARN).bold()));
     }
@@ -150,8 +161,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 
     // tabs + search
-    let counts = [app.entries.len(), skills, plugins];
-    let tabs = Tabs::new((0..3).map(|i| format!("{} {}", TABS[i], counts[i])))
+    let counts = [app.entries.len(), skills, plugins, mcps];
+    let tabs = Tabs::new((0..4).map(|i| format!("{} {}", TABS[i], counts[i])))
         .select(app.tab)
         .style(Style::new().fg(DIM))
         .highlight_style(Style::new().fg(ACCENT).bold().underlined())
@@ -173,12 +184,13 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let col_w: Vec<u16> = agents.iter().map(|p| p.name().len().max(3) as u16 + 1).collect();
     let rows = vis.iter().map(|&i| {
         let e = &app.entries[i];
-        let (glyph, gc) = if e.kind == Kind::Skill { ("◇", SKILL_C) } else { ("▣", PLUGIN_C) };
+        let (glyph, gc) = kind_glyph(e.kind);
         let mut name = vec![Span::styled(format!("{glyph} "), Style::new().fg(gc))];
         if !e.dups.is_empty() {
             name.push(Span::styled("⚠ ", Style::new().fg(WARN)));
         }
-        match e.id.split_once('@') {
+        match e.id.strip_prefix(crate::mcp::PREFIX).map(|n| (n, "")).or(e.id.split_once('@')) {
+            Some((n, "")) => name.push(Span::raw(n.to_string())),
             Some((n, m)) => name.extend([Span::raw(n.to_string()), Span::styled(format!("@{m}"), Style::new().fg(FAINT))]),
             None => name.push(Span::raw(e.id.clone())),
         }
@@ -243,7 +255,11 @@ fn draw_details(f: &mut Frame, app: &App, area: Rect) {
     };
     let e = &app.entries[i];
     let home = app.cx.home.to_string_lossy().into_owned();
-    let (badge, bc) = if e.kind == Kind::Skill { (" SKILL ", SKILL_C) } else { (" PLUGIN ", PLUGIN_C) };
+    let (badge, bc) = match e.kind {
+        Kind::Skill => (" SKILL ", SKILL_C),
+        Kind::Plugin => (" PLUGIN ", PLUGIN_C),
+        Kind::Mcp => (" MCP ", MCP_C),
+    };
     let mut lines = vec![
         Line::from(Span::styled(e.id.clone(), Style::new().fg(Color::White).bold())),
         Line::from(vec![Span::styled(badge, Style::new().bg(bc).fg(Color::Black).bold()), Span::raw("  "), Span::styled(e.source.clone(), Style::new().fg(DIM))]),
@@ -278,6 +294,17 @@ fn draw_details(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(state, Style::new().fg(sc)),
             Span::styled(how, Style::new().fg(FAINT)),
         ]));
+    }
+    if e.kind == Kind::Mcp {
+        if e.vis.get(&P::Claude) == Some(&Vis::Off) && e.mcp.contains_key(&P::Claude) {
+            lines.push(Line::from(Span::styled("  Claude has no MCP switch: its entry is parked in ~/.agents/skillz.json", Style::new().fg(DIM).italic())));
+        }
+        lines.push(Line::default());
+        lines.push(Line::from(Span::styled("CONFIG", Style::new().fg(DIM).bold())));
+        for (p, d) in &e.mcp {
+            lines.push(Line::from(vec![Span::styled(format!("  {:<9}", p.name()), Style::new().fg(pcolor(*p))), Span::styled(crate::mcp::summary(d), Style::new().fg(FAINT))]));
+        }
+        lines.push(Line::from(Span::styled("  OAuth servers need a login in each agent (e.g. omp: /mcp reauth <name>)", Style::new().fg(DIM).italic())));
     }
     if e.claude_copy {
         lines.push(Line::from(Span::styled("  Claude uses its own copy (parked in ~/.agents/disabled when off)", Style::new().fg(DIM).italic())));
@@ -408,12 +435,12 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
             KeyCode::Home | KeyCode::Char('g') => app.table.select(Some(0)),
             KeyCode::End | KeyCode::Char('G') => app.table.select(Some(n.saturating_sub(1))),
             KeyCode::Tab | KeyCode::Right => {
-                app.tab = (app.tab + 1) % 3;
+                app.tab = (app.tab + 1) % TABS.len();
                 app.table.select(Some(0));
                 app.clamp();
             }
             KeyCode::BackTab | KeyCode::Left => {
-                app.tab = (app.tab + 2) % 3;
+                app.tab = (app.tab + TABS.len() - 1) % TABS.len();
                 app.table.select(Some(0));
                 app.clamp();
             }
@@ -441,7 +468,7 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                     let cmds = update_cmds(&app.cx, &app.entries[i]);
                     let id = app.entries[i].id.clone();
                     if cmds.is_empty() {
-                        app.err(format!("{id} is a local skill - nothing to update from"));
+                        app.err(format!("{id} has no update source"));
                     } else {
                         finish(term, app, Ok(cmds), format!("{id} updated"));
                     }
