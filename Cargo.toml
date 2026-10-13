@@ -1,0 +1,13 @@
+[package]
+name = "skillz"
+version = "0.1.0"
+edition = "2024"
+description = "One TUI to manage agent skills & plugins across Claude Code, Codex, omp, OpenCode and Gemini CLI"
+license = "MIT"
+repository = "https://github.com/olekmorawski/skillz"
+
+[dependencies]
+crossterm = "0.28"
+ratatui = "0.29"
+serde_json = { version = "1", features = ["preserve_order"] }
+toml_edit = "0.22"
