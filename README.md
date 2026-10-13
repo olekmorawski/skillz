@@ -118,7 +118,7 @@ The same plugin from two marketplaces, or a hub skill that a plugin also ships, 
 
 ## Good to know
 
-- Restart an agent after switching it. Agents read their skill lists at startup.
+- Restart an agent after switching it. Agents read their skill lists at startup. OpenCode runs a background service that rescans after a few seconds.
 - OpenCode v2 offers no way to hide a single skill that comes from `~/.agents/skills`, so those rows show `◆`.
 - Plugins that only ship LSP servers, agents or hooks show `·` for Gemini and OpenCode, because those agents can only load a plugin's skills.
 - `skillz` only edits the keys it owns. Claude's `settings.json` and Gemini's `settings.json` are re-read before writing, so other settings survive. An `opencode.json` with comments (JSONC) is left alone and you get a message instead.
