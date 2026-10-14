@@ -157,6 +157,20 @@ SKILLZ_SVG=docs/screenshot.svg cargo test screenshot -- --ignored   # regenerate
 
 The screenshot is the real TUI render from a demo `$HOME` (`src/demo.rs`), exported to SVG.
 
+## Changelog
+
+**0.2.1**
+- Search: `/` in the TUI and `skillz search <query>` (or `skillz list <query>`). Every word must match the name, source, description, a plugin's skills or an MCP server's command or URL. While you search, the tabs count matches.
+
+**0.2.0**
+- MCP servers: an MCP tab with per-agent switches for Claude Code, Codex, omp, OpenCode and Gemini CLI.
+- `skillz mcp add <name> <url | command…>` adds a server to every agent. `skillz rm mcp:<name>` removes it everywhere.
+- `skillz sync` copies a server to agents that don't have it yet, in their own config format.
+- OpenCode servers are written in the v2 format (`mcp.servers`). Older `mcp.<name>` entries are moved there.
+
+**0.1.0**
+- First release: the TUI and CLI for skills and plugins across five agents, sync, update, total removal, duplicate detection, Homebrew tap.
+
 ## License
 
 MIT
