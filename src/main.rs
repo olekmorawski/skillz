@@ -13,7 +13,8 @@ const HELP: &str = "skillz - one place for agent skills, plugins & MCP servers (
 
 USAGE
   skillz                         open the TUI
-  skillz list                    print every skill/plugin and which agents see it
+  skillz list [query…]           print everything (or what matches) and which agents see it
+  skillz search <query…>         same as `list <query…>`: name, description, plugin skills, MCP command/URL
   skillz sync [--apply]          show (or fix) what's out of sync between agents
   skillz update                  update all skills and plugins, then sync
   skillz enable  <name> [agent…] make it visible (default: every agent)
@@ -86,7 +87,7 @@ fn main() {
             println!("skillz {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        Some("list" | "ls" | "--list") => list(),
+        Some("list" | "ls" | "--list" | "search") => list(&args[1..].join(" ")),
         Some("sync") => sync_cmd(args.iter().any(|a| a == "--apply")),
         Some("update") => update(),
         Some(c @ ("enable" | "disable")) => toggle_cmd(c == "enable", &args[1..]),
@@ -100,9 +101,12 @@ fn main() {
     }
 }
 
-fn list() -> io::Result<()> {
+fn list(query: &str) -> io::Result<()> {
     let cx = Ctx::load();
-    let entries = load_entries(&cx);
+    let entries: Vec<Entry> = load_entries(&cx).into_iter().filter(|e| e.matches(query)).collect();
+    if entries.is_empty() {
+        return Err(io::Error::other(format!("nothing matches '{query}'")));
+    }
     let w = entries.iter().map(|e| e.id.len()).max().unwrap_or(10).max(10);
     print!("{:<w$}  {:<6}", "NAME", "TYPE");
     for p in &cx.agents {

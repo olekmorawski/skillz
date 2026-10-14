@@ -52,7 +52,6 @@ impl App {
         App { cx, entries, filter: String::new(), typing: false, tab: 0, table: TableState::default().with_selected(0), toast: None, confirm_delete: false }
     }
     fn visible(&self) -> Vec<usize> {
-        let f = self.filter.to_lowercase();
         (0..self.entries.len())
             .filter(|&i| {
                 let e = &self.entries[i];
@@ -62,7 +61,7 @@ impl App {
                     3 => e.kind == Kind::Mcp,
                     _ => true,
                 };
-                tab_ok && (f.is_empty() || e.id.to_lowercase().contains(&f) || e.source.to_lowercase().contains(&f) || e.desc.to_lowercase().contains(&f))
+                tab_ok && e.matches(&self.filter)
             })
             .collect()
     }
@@ -161,7 +160,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 
     // tabs + search
-    let counts = [app.entries.len(), skills, plugins, mcps];
+    // while searching, tabs count matches
+    let hits = |k: Option<Kind>| app.entries.iter().filter(|e| k.is_none_or(|k| e.kind == k) && e.matches(&app.filter)).count();
+    let counts = [hits(None), hits(Some(Kind::Skill)), hits(Some(Kind::Plugin)), hits(Some(Kind::Mcp))];
     let tabs = Tabs::new((0..4).map(|i| format!("{} {}", TABS[i], counts[i])))
         .select(app.tab)
         .style(Style::new().fg(DIM))
@@ -174,7 +175,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     } else if !app.filter.is_empty() {
         Line::from(vec![Span::styled("⌕ ", Style::new().fg(DIM)), Span::styled(app.filter.clone(), Style::new().fg(Color::White))])
     } else {
-        Line::from(Span::styled("⌕ / to filter", Style::new().fg(FAINT)))
+        Line::from(Span::styled("⌕ / to search", Style::new().fg(FAINT)))
     };
     f.render_widget(Paragraph::new(search).alignment(Alignment::Right), bar);
 
@@ -233,7 +234,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     } else {
         let mut keys = Vec::new();
         let n = format!("1-{}", agents.len());
-        for (k, l) in [(n.as_str(), "toggle"), ("a", "all"), ("u", "update"), ("U", "update all"), ("s", "sync"), ("d", "delete"), ("tab", "view"), ("/", "filter"), ("q", "quit")] {
+        for (k, l) in [(n.as_str(), "toggle"), ("a", "all"), ("u", "update"), ("U", "update all"), ("s", "sync"), ("d", "delete"), ("tab", "view"), ("/", "search"), ("q", "quit")] {
             keys.extend(chip(k, l));
         }
         Line::from(keys)

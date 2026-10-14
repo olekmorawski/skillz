@@ -102,7 +102,7 @@ Choices you make are remembered in `~/.agents/skillz.json`, so `skillz sync` nev
 | `s` | sync (link new skills, follow plugins to every agent, clean broken links) |
 | `d` | **remove completely** (see below) |
 | `tab` `←` `→` | All / Skills / Plugins / MCP |
-| `/` | filter by name, source or description; `esc` clears |
+| `/` | search: name, source, description, a plugin's skills, an MCP server's command or URL (every word must match); `esc` clears |
 | `↑↓` `j k` `g G` `PgUp PgDn` | move |
 | `r` / `q` | reload / quit |
 
@@ -112,6 +112,7 @@ Symbols: `◇` skill · `▣` plugin · `⌁` MCP server · `●` visible · `�
 
 ```sh
 skillz list                         # the table, in plain text
+skillz search caveman               # only what matches (same as `skillz list caveman`)
 skillz sync                         # what's out of sync (dry run)
 skillz sync --apply                 # fix it
 skillz update                       # npx skills update, claude/codex/omp plugin updates, then sync

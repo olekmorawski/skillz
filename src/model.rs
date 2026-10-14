@@ -107,6 +107,12 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// Search: every word must appear in the name, source, description, a plugin's skills or an MCP config.
+    pub fn matches(&self, query: &str) -> bool {
+        let hay = format!("{} {} {} {} {}", self.id, self.source, self.desc, self.skills.join(" "), self.path.to_string_lossy()).to_lowercase();
+        query.to_lowercase().split_whitespace().all(|w| hay.contains(w))
+    }
+
     pub fn plugin_name(&self) -> &str {
         self.id.split('@').next().unwrap_or(&self.id)
     }
@@ -965,6 +971,16 @@ mod tests {
         assert_eq!(frontmatter_desc("---\nname: a\ndescription: \"Hi there\"\n---\nbody"), "Hi there");
         assert_eq!(frontmatter_desc("---\ndescription: |\n  line one\n  line two\nname: x\n---"), "line one line two");
         assert_eq!(frontmatter_desc("no frontmatter"), "");
+    }
+
+    #[test]
+    fn search_matches_words_anywhere() {
+        let mut e = crate::mcp::new_entry("caveman", &["npx".into(), "caveman-mcp".into()]).unwrap();
+        e.skills = vec!["grunt".into()];
+        for q in ["caveman", "CAVE", "npx caveman", "grunt", "mcp:", ""] {
+            assert!(e.matches(q), "{q}");
+        }
+        assert!(!e.matches("caveman zebra"));
     }
 
     #[test]

@@ -92,7 +92,7 @@
 <text x="198.6" y="129.68" fill="#737380" xml:space="preserve" textLength="94.600006" lengthAdjust="spacingAndGlyphs"> Plugins 2 </text>
 <text x="293.2" y="129.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 <text x="301.80002" y="129.68" fill="#737380" xml:space="preserve" textLength="731.00006" lengthAdjust="spacingAndGlyphs"> MCP 2                                                                               </text>
-<text x="1032.8" y="129.68" fill="#464652" xml:space="preserve" textLength="111.8" lengthAdjust="spacingAndGlyphs">⌕ / to filter</text>
+<text x="1032.8" y="129.68" fill="#464652" xml:space="preserve" textLength="111.8" lengthAdjust="spacingAndGlyphs">⌕ / to search</text>
 
 
 <text x="26.6" y="148.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">╭</text>
@@ -469,7 +469,7 @@
 <rect x="654.4" y="496" width="43" height="19" fill="#373742"/><text x="654.4" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="43" lengthAdjust="spacingAndGlyphs"> tab </text>
 <text x="697.4" y="509.68" fill="#737380" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> view  </text>
 <rect x="757.60004" y="496" width="25.800001" height="19" fill="#373742"/><text x="757.60004" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> / </text>
-<text x="783.4" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> filter  </text>
+<text x="783.4" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> search  </text>
 <rect x="860.80005" y="496" width="25.800001" height="19" fill="#373742"/><text x="860.80005" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> q </text>
 <text x="886.60004" y="509.68" fill="#737380" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> quit  </text>
 
