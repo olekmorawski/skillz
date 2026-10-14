@@ -127,8 +127,8 @@
 
 <text x="26.6" y="186.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 
-<text x="52.4" y="186.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
-<text x="69.600006" y="186.68" fill="#d6d6de" xml:space="preserve" textLength="283.80002" lengthAdjust="spacingAndGlyphs">brainstorming                    </text>
+<text x="69.600006" y="186.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
+<text x="86.8" y="186.68" fill="#d6d6de" xml:space="preserve" textLength="266.6" lengthAdjust="spacingAndGlyphs">brainstorming                  </text>
 <text x="353.40002" y="186.68" fill="#d97757" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
 
 <text x="413.6" y="186.68" fill="#10a37f" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
@@ -150,8 +150,8 @@
 
 <text x="26.6" y="205.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 
-<text x="52.4" y="205.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
-<text x="69.600006" y="205.68" fill="#d6d6de" xml:space="preserve" textLength="283.80002" lengthAdjust="spacingAndGlyphs">changelog-writer                 </text>
+<text x="69.600006" y="205.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
+<text x="86.8" y="205.68" fill="#d6d6de" xml:space="preserve" textLength="266.6" lengthAdjust="spacingAndGlyphs">changelog-writer               </text>
 <text x="353.40002" y="205.68" fill="#d97757" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
 
 <text x="413.6" y="205.68" fill="#10a37f" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
@@ -176,8 +176,9 @@
 <text x="26.6" y="224.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 
 <rect x="43.800003" y="211" width="8.6" height="19" fill="#26262e"/><text x="43.800003" y="224.68" fill="#d97757" font-weight="700" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">▌</text>
-<rect x="52.4" y="211" width="17.2" height="19" fill="#26262e"/><text x="52.4" y="224.68" fill="#6eb4e6" font-weight="700" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
-<rect x="69.600006" y="211" width="283.80002" height="19" fill="#26262e"/><text x="69.600006" y="224.68" fill="#d6d6de" font-weight="700" xml:space="preserve" textLength="283.80002" lengthAdjust="spacingAndGlyphs">frontend-taste                   </text>
+<rect x="52.4" y="211" width="17.2" height="19" fill="#26262e"/>
+<rect x="69.600006" y="211" width="17.2" height="19" fill="#26262e"/><text x="69.600006" y="224.68" fill="#6eb4e6" font-weight="700" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
+<rect x="86.8" y="211" width="266.6" height="19" fill="#26262e"/><text x="86.8" y="224.68" fill="#d6d6de" font-weight="700" xml:space="preserve" textLength="266.6" lengthAdjust="spacingAndGlyphs">frontend-taste                 </text>
 <rect x="353.40002" y="211" width="8.6" height="19" fill="#26262e"/><text x="353.40002" y="224.68" fill="#d97757" font-weight="700" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
 <rect x="362" y="211" width="51.600002" height="19" fill="#26262e"/>
 <rect x="413.6" y="211" width="8.6" height="19" fill="#26262e"/><text x="413.6" y="224.68" fill="#464652" font-weight="700" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">○</text>
@@ -200,8 +201,8 @@
 
 <text x="26.6" y="243.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 
-<text x="52.4" y="243.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
-<text x="69.600006" y="243.68" fill="#d6d6de" xml:space="preserve" textLength="283.80002" lengthAdjust="spacingAndGlyphs">pdf-tools                        </text>
+<text x="69.600006" y="243.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
+<text x="86.8" y="243.68" fill="#d6d6de" xml:space="preserve" textLength="266.6" lengthAdjust="spacingAndGlyphs">pdf-tools                      </text>
 <text x="353.40002" y="243.68" fill="#d97757" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
 
 <text x="413.6" y="243.68" fill="#10a37f" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
@@ -221,8 +222,8 @@
 
 <text x="26.6" y="262.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 
-<text x="52.4" y="262.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
-<text x="69.600006" y="262.68" fill="#d6d6de" xml:space="preserve" textLength="283.80002" lengthAdjust="spacingAndGlyphs">postgres-tuning                  </text>
+<text x="69.600006" y="262.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
+<text x="86.8" y="262.68" fill="#d6d6de" xml:space="preserve" textLength="266.6" lengthAdjust="spacingAndGlyphs">postgres-tuning                </text>
 <text x="353.40002" y="262.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">○</text>
 
 <text x="413.6" y="262.68" fill="#10a37f" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
@@ -244,8 +245,8 @@
 
 <text x="26.6" y="281.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 
-<text x="52.4" y="281.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
-<text x="69.600006" y="281.68" fill="#d6d6de" xml:space="preserve" textLength="283.80002" lengthAdjust="spacingAndGlyphs">systematic-debugging             </text>
+<text x="69.600006" y="281.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
+<text x="86.8" y="281.68" fill="#d6d6de" xml:space="preserve" textLength="266.6" lengthAdjust="spacingAndGlyphs">systematic-debugging           </text>
 <text x="353.40002" y="281.68" fill="#d97757" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
 
 <text x="413.6" y="281.68" fill="#10a37f" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
@@ -267,8 +268,8 @@
 
 <text x="26.6" y="300.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 
-<text x="52.4" y="300.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
-<text x="69.600006" y="300.68" fill="#d6d6de" xml:space="preserve" textLength="283.80002" lengthAdjust="spacingAndGlyphs">test-first                       </text>
+<text x="69.600006" y="300.68" fill="#6eb4e6" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">◇ </text>
+<text x="86.8" y="300.68" fill="#d6d6de" xml:space="preserve" textLength="266.6" lengthAdjust="spacingAndGlyphs">test-first                     </text>
 <text x="353.40002" y="300.68" fill="#d97757" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
 
 <text x="413.6" y="300.68" fill="#10a37f" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
@@ -288,9 +289,9 @@
 
 <text x="26.6" y="319.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 
-<text x="52.4" y="319.68" fill="#dc8cdc" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">▣ </text>
-<text x="69.600006" y="319.68" fill="#d6d6de" xml:space="preserve" textLength="68.8" lengthAdjust="spacingAndGlyphs">ponytail</text>
-<text x="138.40001" y="319.68" fill="#464652" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs">@ponytail</text>
+<text x="69.600006" y="319.68" fill="#dc8cdc" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">▣ </text>
+<text x="86.8" y="319.68" fill="#d6d6de" xml:space="preserve" textLength="68.8" lengthAdjust="spacingAndGlyphs">ponytail</text>
+<text x="155.6" y="319.68" fill="#464652" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs">@ponytail</text>
 
 <text x="353.40002" y="319.68" fill="#d97757" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
 
@@ -313,9 +314,9 @@
 
 <text x="26.6" y="338.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 
-<text x="52.4" y="338.68" fill="#dc8cdc" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">▣ </text>
-<text x="69.600006" y="338.68" fill="#d6d6de" xml:space="preserve" textLength="146.20001" lengthAdjust="spacingAndGlyphs">rust-analyzer-lsp</text>
-<text x="215.8" y="338.68" fill="#464652" xml:space="preserve" textLength="103.200005" lengthAdjust="spacingAndGlyphs">@claude-plug</text>
+<text x="69.600006" y="338.68" fill="#dc8cdc" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">▣ </text>
+<text x="86.8" y="338.68" fill="#d6d6de" xml:space="preserve" textLength="146.20001" lengthAdjust="spacingAndGlyphs">rust-analyzer-lsp</text>
+<text x="233.00002" y="338.68" fill="#464652" xml:space="preserve" textLength="86" lengthAdjust="spacingAndGlyphs">@claude-pl</text>
 
 <text x="353.40002" y="338.68" fill="#d97757" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
 
@@ -341,8 +342,8 @@
 
 <text x="26.6" y="357.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 
-<text x="52.4" y="357.68" fill="#82d2be" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">⌁ </text>
-<text x="69.600006" y="357.68" fill="#d6d6de" xml:space="preserve" textLength="283.80002" lengthAdjust="spacingAndGlyphs">linear                           </text>
+<text x="69.600006" y="357.68" fill="#82d2be" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">⌁ </text>
+<text x="86.8" y="357.68" fill="#d6d6de" xml:space="preserve" textLength="266.6" lengthAdjust="spacingAndGlyphs">linear                         </text>
 <text x="353.40002" y="357.68" fill="#d97757" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
 
 <text x="413.6" y="357.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">○</text>
@@ -366,8 +367,8 @@
 
 <text x="26.6" y="376.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 
-<text x="52.4" y="376.68" fill="#82d2be" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">⌁ </text>
-<text x="69.600006" y="376.68" fill="#d6d6de" xml:space="preserve" textLength="283.80002" lengthAdjust="spacingAndGlyphs">playwright                       </text>
+<text x="69.600006" y="376.68" fill="#82d2be" xml:space="preserve" textLength="17.2" lengthAdjust="spacingAndGlyphs">⌁ </text>
+<text x="86.8" y="376.68" fill="#d6d6de" xml:space="preserve" textLength="266.6" lengthAdjust="spacingAndGlyphs">playwright                     </text>
 <text x="353.40002" y="376.68" fill="#d97757" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
 
 <text x="413.6" y="376.68" fill="#10a37f" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">●</text>
@@ -458,19 +459,21 @@
 <text x="69.600006" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> toggle  </text>
 <rect x="147" y="496" width="25.800001" height="19" fill="#373742"/><text x="147" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> a </text>
 <text x="172.8" y="509.68" fill="#737380" xml:space="preserve" textLength="51.600002" lengthAdjust="spacingAndGlyphs"> all  </text>
-<rect x="224.40001" y="496" width="25.800001" height="19" fill="#373742"/><text x="224.40001" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> u </text>
-<text x="250.20001" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> update  </text>
-<rect x="327.6" y="496" width="25.800001" height="19" fill="#373742"/><text x="327.6" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> U </text>
-<text x="353.40002" y="509.68" fill="#737380" xml:space="preserve" textLength="111.8" lengthAdjust="spacingAndGlyphs"> update all  </text>
-<rect x="465.2" y="496" width="25.800001" height="19" fill="#373742"/><text x="465.2" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> s </text>
-<text x="491.00003" y="509.68" fill="#737380" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> sync  </text>
-<rect x="551.2" y="496" width="25.800001" height="19" fill="#373742"/><text x="551.2" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> d </text>
-<text x="577" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> delete  </text>
-<rect x="654.4" y="496" width="43" height="19" fill="#373742"/><text x="654.4" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="43" lengthAdjust="spacingAndGlyphs"> tab </text>
-<text x="697.4" y="509.68" fill="#737380" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> view  </text>
-<rect x="757.60004" y="496" width="25.800001" height="19" fill="#373742"/><text x="757.60004" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> / </text>
-<text x="783.4" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> search  </text>
-<rect x="860.80005" y="496" width="25.800001" height="19" fill="#373742"/><text x="860.80005" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> q </text>
-<text x="886.60004" y="509.68" fill="#737380" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> quit  </text>
+<rect x="224.40001" y="496" width="60.200005" height="19" fill="#373742"/><text x="224.40001" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> space </text>
+<text x="284.6" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> select  </text>
+<rect x="362" y="496" width="25.800001" height="19" fill="#373742"/><text x="362" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> * </text>
+<text x="387.80002" y="509.68" fill="#737380" xml:space="preserve" textLength="129" lengthAdjust="spacingAndGlyphs"> select shown  </text>
+<rect x="516.80005" y="496" width="25.800001" height="19" fill="#373742"/><text x="516.80005" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> u </text>
+<text x="542.60004" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> update  </text>
+<rect x="620" y="496" width="25.800001" height="19" fill="#373742"/><text x="620" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> U </text>
+<text x="645.80005" y="509.68" fill="#737380" xml:space="preserve" textLength="111.8" lengthAdjust="spacingAndGlyphs"> update all  </text>
+<rect x="757.60004" y="496" width="25.800001" height="19" fill="#373742"/><text x="757.60004" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> s </text>
+<text x="783.4" y="509.68" fill="#737380" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> sync  </text>
+<rect x="843.60004" y="496" width="25.800001" height="19" fill="#373742"/><text x="843.60004" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> d </text>
+<text x="869.4" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> delete  </text>
+<rect x="946.80005" y="496" width="43" height="19" fill="#373742"/><text x="946.80005" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="43" lengthAdjust="spacingAndGlyphs"> tab </text>
+<text x="989.80005" y="509.68" fill="#737380" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> view  </text>
+<rect x="1050" y="496" width="25.800001" height="19" fill="#373742"/><text x="1050" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> / </text>
+<text x="1075.8" y="509.68" fill="#737380" xml:space="preserve" textLength="68.8" lengthAdjust="spacingAndGlyphs"> search </text>
 
 </svg>

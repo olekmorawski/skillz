@@ -9,7 +9,7 @@ use ratatui::{
     widgets::{Block, BorderType, Cell, Clear, LineGauge, Padding, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState, Tabs, Wrap},
     DefaultTerminal, Frame,
 };
-use std::{fs, io};
+use std::{collections::BTreeSet, fs, io};
 
 const ACCENT: Color = Color::Rgb(217, 119, 87);
 const DIM: Color = Color::Rgb(115, 115, 128);
@@ -43,13 +43,14 @@ pub struct App {
     pub table: TableState,
     pub toast: Option<(String, bool)>,
     pub confirm_delete: bool,
+    pub marked: BTreeSet<String>, // ids picked with space; actions apply to these instead of the cursor row
 }
 
 impl App {
     pub fn new() -> App {
         let cx = Ctx::load();
         let entries = load_entries(&cx);
-        App { cx, entries, filter: String::new(), typing: false, tab: 0, table: TableState::default().with_selected(0), toast: None, confirm_delete: false }
+        App { cx, entries, filter: String::new(), typing: false, tab: 0, table: TableState::default().with_selected(0), toast: None, confirm_delete: false, marked: BTreeSet::new() }
     }
     fn visible(&self) -> Vec<usize> {
         (0..self.entries.len())
@@ -72,9 +73,17 @@ impl App {
         let n = self.visible().len();
         self.table.select(if n == 0 { None } else { Some(self.table.selected().unwrap_or(0).min(n - 1)) });
     }
+    /// Rows an action applies to: the marked ones, else the cursor row.
+    fn targets(&self) -> Vec<usize> {
+        if self.marked.is_empty() {
+            return self.current().into_iter().collect();
+        }
+        (0..self.entries.len()).filter(|&i| self.marked.contains(&self.entries[i].id)).collect()
+    }
     fn reload(&mut self) {
         self.cx = Ctx::load();
         self.entries = load_entries(&self.cx);
+        self.marked.retain(|id| self.entries.iter().any(|e| &e.id == id));
         self.clamp();
     }
     fn ok(&mut self, m: impl Into<String>) {
@@ -186,7 +195,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let rows = vis.iter().map(|&i| {
         let e = &app.entries[i];
         let (glyph, gc) = kind_glyph(e.kind);
-        let mut name = vec![Span::styled(format!("{glyph} "), Style::new().fg(gc))];
+        let tick = if app.marked.contains(&e.id) { Span::styled("✓ ", Style::new().fg(ACCENT).bold()) } else { Span::raw("  ") };
+        let mut name = vec![tick, Span::styled(format!("{glyph} "), Style::new().fg(gc))];
         if !e.dups.is_empty() {
             name.push(Span::styled("⚠ ", Style::new().fg(WARN)));
         }
@@ -233,8 +243,13 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         Line::from([chip("enter", "keep"), chip("esc", "clear")].concat())
     } else {
         let mut keys = Vec::new();
+        if !app.marked.is_empty() {
+            keys.push(Span::styled(format!(" {} selected ", app.marked.len()), Style::new().bg(ACCENT).fg(Color::Black).bold()));
+            keys.push(Span::raw("  "));
+            keys.extend(chip("esc", "unselect"));
+        }
         let n = format!("1-{}", agents.len());
-        for (k, l) in [(n.as_str(), "toggle"), ("a", "all"), ("u", "update"), ("U", "update all"), ("s", "sync"), ("d", "delete"), ("tab", "view"), ("/", "search"), ("q", "quit")] {
+        for (k, l) in [(n.as_str(), "toggle"), ("a", "all"), ("space", "select"), ("*", "select shown"), ("u", "update"), ("U", "update all"), ("s", "sync"), ("d", "delete"), ("tab", "view"), ("/", "search"), ("q", "quit")] {
             keys.extend(chip(k, l));
         }
         Line::from(keys)
@@ -242,8 +257,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     f.render_widget(Paragraph::new(foot_line), foot);
 
     if app.confirm_delete {
-        if let Some(i) = app.current() {
-            draw_confirm(f, &app.entries[i].id);
+        let ids: Vec<&str> = app.targets().iter().map(|&i| app.entries[i].id.as_str()).collect();
+        if !ids.is_empty() {
+            draw_confirm(f, &ids);
         }
     }
 }
@@ -338,17 +354,22 @@ fn draw_details(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }).block(block), area);
 }
 
-fn draw_confirm(f: &mut Frame, name: &str) {
+fn draw_confirm(f: &mut Frame, ids: &[&str]) {
+    let name = if ids.len() == 1 { ids[0].to_string() } else { format!("{} items", ids.len()) };
+    let more = if ids.len() > 1 { ids.iter().take(4).copied().collect::<Vec<_>>().join(", ") + if ids.len() > 4 { ", …" } else { "" } } else { String::new() };
     let [r] = Layout::horizontal([Constraint::Length(60)]).flex(Flex::Center).areas(f.area());
-    let [r] = Layout::vertical([Constraint::Length(8)]).flex(Flex::Center).areas(r);
+    let [r] = Layout::vertical([Constraint::Length(if more.is_empty() { 8 } else { 10 })]).flex(Flex::Center).areas(r);
     f.render_widget(Clear, r);
-    let text = vec![
-        Line::from(vec![Span::raw("Remove "), Span::styled(name.to_string(), Style::new().bold()), Span::raw(" completely?")]),
+    let mut text = vec![Line::from(vec![Span::raw("Remove "), Span::styled(name, Style::new().bold()), Span::raw(" completely?")])];
+    if !more.is_empty() {
+        text.push(Line::from(Span::styled(more, Style::new().fg(Color::White))));
+    }
+    text.extend([
         Line::from(Span::styled("hub, every agent, all configs and caches", Style::new().fg(DIM))),
         Line::default(),
         Line::from([chip("y", "remove"), chip("n", "cancel")].concat()),
-    ];
-    f.render_widget(Paragraph::new(text).alignment(Alignment::Center).block(rounded("remove", BAD).padding(Padding::top(1))), r);
+    ]);
+    f.render_widget(Paragraph::new(text).wrap(Wrap { trim: true }).alignment(Alignment::Center).block(rounded("remove", BAD).padding(Padding::top(1))), r);
 }
 
 /// Hand the terminal to external commands, then come back.
@@ -409,11 +430,20 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
         if app.confirm_delete {
             app.confirm_delete = false;
             if k.code == KeyCode::Char('y') {
-                if let Some(i) = app.current() {
-                    let e = app.entries.remove(i);
-                    let r = purge(&mut app.cx, &e);
-                    finish(term, app, r, format!("removed {} everywhere", e.id));
+                let idx = app.targets();
+                let (mut cmds, mut err) = (Vec::new(), None);
+                for &i in &idx {
+                    match purge(&mut app.cx, &app.entries[i]) {
+                        Ok(c) => cmds.extend(c),
+                        Err(e) => err = err.or(Some(e)),
+                    }
                 }
+                let msg = match idx.as_slice() {
+                    [i] => format!("removed {} everywhere", app.entries[*i].id),
+                    _ => format!("removed {} items everywhere", idx.len()),
+                };
+                app.marked.clear();
+                finish(term, app, err.map_or(Ok(cmds), Err), msg);
             } else {
                 app.ok("cancelled");
             }
@@ -424,6 +454,25 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
         let sel = app.table.selected().unwrap_or(0);
         match k.code {
             KeyCode::Char('q') => return Ok(()),
+            KeyCode::Esc if !app.marked.is_empty() => app.marked.clear(),
+            KeyCode::Char(' ') => {
+                if let Some(i) = app.current() {
+                    let id = app.entries[i].id.clone();
+                    if !app.marked.remove(&id) {
+                        app.marked.insert(id);
+                    }
+                    app.table.select(Some((sel + 1).min(n.saturating_sub(1))));
+                }
+            }
+            // select every row shown (e.g. after a search); again to unselect them
+            KeyCode::Char('*') => {
+                let ids: Vec<String> = app.visible().iter().map(|&i| app.entries[i].id.clone()).collect();
+                if ids.iter().all(|id| app.marked.contains(id)) {
+                    ids.iter().for_each(|id| { app.marked.remove(id); });
+                } else {
+                    app.marked.extend(ids);
+                }
+            }
             KeyCode::Esc if !app.filter.is_empty() => {
                 app.filter.clear();
                 app.clamp();
@@ -453,7 +502,7 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                 app.reload();
                 app.ok("reloaded");
             }
-            KeyCode::Char('d') if app.current().is_some() => app.confirm_delete = true,
+            KeyCode::Char('d') if !app.targets().is_empty() => app.confirm_delete = true,
             KeyCode::Char('s') => {
                 let r = sync::sync(&mut app.cx, true).map(|r| r.cmds);
                 finish(term, app, r, "synced".into());
@@ -465,46 +514,63 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                 finish(term, app, r, if ok { "everything updated".into() } else { "updated - some steps failed".into() });
             }
             KeyCode::Char('u') => {
-                if let Some(i) = app.current() {
-                    let cmds = update_cmds(&app.cx, &app.entries[i]);
-                    let id = app.entries[i].id.clone();
-                    if cmds.is_empty() {
-                        app.err(format!("{id} has no update source"));
-                    } else {
-                        finish(term, app, Ok(cmds), format!("{id} updated"));
-                    }
+                let idx = app.targets();
+                let cmds: Cmds = idx.iter().flat_map(|&i| update_cmds(&app.cx, &app.entries[i])).collect();
+                let label = match idx.as_slice() {
+                    [i] => app.entries[*i].id.clone(),
+                    _ => format!("{} items", idx.len()),
+                };
+                if cmds.is_empty() {
+                    app.err(format!("{label}: no update source"));
+                } else {
+                    app.marked.clear();
+                    finish(term, app, Ok(cmds), format!("{label} updated"));
                 }
             }
             KeyCode::Char(c @ ('1'..='9' | 'a')) => {
-                let Some(i) = app.current() else { continue };
                 let agents = app.cx.agents.clone();
-                let e = &app.entries[i];
-                let targets: Vec<P> = if c == 'a' {
-                    agents.iter().copied().filter(|p| matches!(e.vis.get(p), Some(Vis::On | Vis::Off))).collect()
-                } else {
-                    match agents.get(c as usize - '1' as usize) {
-                        Some(&p) => vec![p],
+                let one = match c {
+                    'a' => None,
+                    _ => match agents.get(c as usize - '1' as usize) {
+                        Some(&p) => Some(p),
                         None => continue,
-                    }
+                    },
                 };
-                // 'a': everything on unless everything already is
-                let all_on = targets.iter().all(|p| e.vis.get(p) == Some(&Vis::On));
-                let mut cmds = Vec::new();
-                let mut err = None;
-                let mut what = Vec::new();
-                for &p in &targets {
-                    let on = if c == 'a' { !all_on } else { e.vis.get(&p) != Some(&Vis::On) };
-                    match set(&mut app.cx, e, p, on, true) {
+                let idx = app.targets();
+                // (row, agent) pairs this key switches; 'a' skips agents without a switch
+                let pairs: Vec<(usize, P)> = idx
+                    .iter()
+                    .flat_map(|&i| {
+                        let e = &app.entries[i];
+                        agents.iter().copied().filter(move |p| match one {
+                            Some(q) => *p == q && e.vis.contains_key(p),
+                            None => matches!(e.vis.get(p), Some(Vis::On | Vis::Off)),
+                        }).map(move |p| (i, p))
+                    })
+                    .collect();
+                if pairs.is_empty() {
+                    continue;
+                }
+                // one direction for all: on unless everything already is
+                let on = !pairs.iter().all(|&(i, p)| app.entries[i].vis.get(&p) == Some(&Vis::On));
+                let (mut cmds, mut err, mut done) = (Vec::new(), None, BTreeSet::new());
+                for &(i, p) in &pairs {
+                    match set(&mut app.cx, &app.entries[i], p, on, true) {
                         Ok(x) => {
                             cmds.extend(x);
-                            what.push(format!("{} {}", p.name(), if on { "on" } else { "off" }));
+                            done.insert(p);
                         }
                         Err(x) => err = Some(x),
                     }
                 }
-                let msg = format!("{} → {} · restart the agent to apply", e.id, what.join(", "));
+                let who = match idx.as_slice() {
+                    [i] => app.entries[*i].id.clone(),
+                    _ => format!("{} items", idx.len()),
+                };
+                let names: Vec<&str> = done.iter().map(|p| p.name()).collect();
+                let msg = format!("{who} → {} {} · restart the agent to apply", names.join(", "), if on { "on" } else { "off" });
                 let r = match err {
-                    Some(x) if what.is_empty() => Err(x),
+                    Some(x) if done.is_empty() => Err(x),
                     _ => Ok(cmds),
                 };
                 finish(term, app, r, msg);

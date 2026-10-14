@@ -99,6 +99,8 @@ Choices you make are remembered in `~/.agents/skillz.json`, so `skillz sync` nev
 | Key | Action |
 |---|---|
 | `1` … `5` | switch the selected row for that agent (numbers match the cards at the top) |
+| `space` | select / unselect the row; `1`–`5`, `a`, `u` and `d` then act on every selected row |
+| `*` | select every row shown, e.g. after a search (again to unselect); `esc` clears the selection |
 | `a` | all agents on, or all off if they're already all on |
 | `u` / `U` | update the selected row / update everything |
 | `s` | sync (link new skills, follow plugins to every agent, clean broken links) |
@@ -158,6 +160,9 @@ SKILLZ_SVG=docs/screenshot.svg cargo test screenshot -- --ignored   # regenerate
 The screenshot is the real TUI render from a demo `$HOME` (`src/demo.rs`), exported to SVG.
 
 ## Changelog
+
+**0.2.2**
+- Multi-select: `space` picks rows, `*` picks everything shown. Switching, updating and removing then apply to the whole selection. With a mixed selection, a switch turns the agent on for all rows unless all are already on.
 
 **0.2.1**
 - Search: `/` in the TUI and `skillz search <query>` (or `skillz list <query>`). Every word must match the name, source, description, a plugin's skills or an MCP server's command or URL. While you search, the tabs count matches.
