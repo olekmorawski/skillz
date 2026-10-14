@@ -1,6 +1,8 @@
 <div align="center">
 
-# ✻ skillz
+<img src="docs/logo.png" alt="skillz" width="200">
+
+# skillz
 
 **One TUI for every agent's skills, plugins and MCP servers.**
 See, switch, update and remove them across **Claude Code**, **Codex**, **omp**, **OpenCode** and **Gemini CLI** without hand-editing five config formats.
