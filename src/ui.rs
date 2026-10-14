@@ -1,5 +1,6 @@
 use crate::model::*;
-use crate::{run_cmds, sync};
+use crate::mcp::Health;
+use crate::{add, mcp, run_cmds, sync, updates};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     layout::{Alignment, Constraint, Flex, Layout, Margin, Rect},
@@ -9,7 +10,13 @@ use ratatui::{
     widgets::{Block, BorderType, Cell, Clear, LineGauge, Padding, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState, Tabs, Wrap},
     DefaultTerminal, Frame,
 };
-use std::{collections::BTreeSet, fs, io};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs, io,
+    sync::mpsc::{channel, Receiver, Sender},
+    thread,
+    time::Duration,
+};
 
 const ACCENT: Color = Color::Rgb(217, 119, 87);
 const DIM: Color = Color::Rgb(115, 115, 128);
@@ -22,7 +29,8 @@ const WARN: Color = Color::Rgb(240, 190, 90);
 const SKILL_C: Color = Color::Rgb(110, 180, 230);
 const PLUGIN_C: Color = Color::Rgb(220, 140, 220);
 const MCP_C: Color = Color::Rgb(130, 210, 190);
-const TABS: [&str; 4] = ["All", "Skills", "Plugins", "MCP"];
+const TABS: [&str; 5] = ["All", "Skills", "Plugins", "MCP", "Browse"];
+const BROWSE: usize = 4;
 
 fn pcolor(p: P) -> Color {
     match p {
@@ -44,27 +52,110 @@ pub struct App {
     pub toast: Option<(String, bool)>,
     pub confirm_delete: bool,
     pub marked: BTreeSet<String>, // ids picked with space; actions apply to these instead of the cursor row
+    pub outdated: BTreeSet<String>,
+    pub checking_updates: bool,
+    pub health: BTreeMap<String, Health>, // MCP server name -> live status
+    pub adding: Option<String>,           // the `+` input line while open
+    pub searching: bool,                  // skills.sh request in flight
+    tx: Sender<Msg>,
+    rx: Receiver<Msg>,
+}
+
+/// Results from background threads (network checks never block the UI).
+enum Msg {
+    Outdated(BTreeSet<String>),
+    Health(String, Health),
+    Found(Vec<Entry>),
+}
+
+fn is_found(e: &Entry) -> bool {
+    e.kind == Kind::Catalog && e.source.starts_with("skills.sh")
 }
 
 impl App {
     pub fn new() -> App {
         let cx = Ctx::load();
-        let entries = load_entries(&cx);
-        App { cx, entries, filter: String::new(), typing: false, tab: 0, table: TableState::default().with_selected(0), toast: None, confirm_delete: false, marked: BTreeSet::new() }
+        let mut entries = load_entries(&cx);
+        entries.extend(add::catalog(&cx));
+        let (tx, rx) = channel();
+        App {
+            cx,
+            entries,
+            filter: String::new(),
+            typing: false,
+            tab: 0,
+            table: TableState::default().with_selected(0),
+            toast: None,
+            confirm_delete: false,
+            marked: BTreeSet::new(),
+            outdated: BTreeSet::new(),
+            checking_updates: false,
+            health: BTreeMap::new(),
+            adding: None,
+            searching: false,
+            tx,
+            rx,
+        }
     }
     fn visible(&self) -> Vec<usize> {
+        self.visible_in(self.tab)
+    }
+    fn visible_in(&self, tab: usize) -> Vec<usize> {
         (0..self.entries.len())
             .filter(|&i| {
                 let e = &self.entries[i];
-                let tab_ok = match self.tab {
+                let tab_ok = match tab {
                     1 => e.kind == Kind::Skill,
                     2 => e.kind == Kind::Plugin,
                     3 => e.kind == Kind::Mcp,
-                    _ => true,
+                    BROWSE => e.kind == Kind::Catalog,
+                    _ => e.kind != Kind::Catalog,
                 };
-                tab_ok && e.matches(&self.filter)
+                // skills.sh results already are the answer to the search
+                tab_ok && (is_found(e) || e.matches(&self.filter))
             })
             .collect()
+    }
+    fn check_updates(&mut self) {
+        let (tx, home) = (self.tx.clone(), self.cx.home.clone());
+        self.checking_updates = true;
+        thread::spawn(move || tx.send(Msg::Outdated(updates::check(&home))));
+    }
+    fn check_health(&mut self) {
+        for e in self.entries.iter().filter(|e| e.kind == Kind::Mcp) {
+            let Some(def) = e.mcp.get(&P::Claude).or_else(|| e.mcp.values().next()).cloned() else { continue };
+            let (tx, name) = (self.tx.clone(), mcp::name_of(&e.id).to_string());
+            self.health.insert(name.clone(), Health::Checking);
+            thread::spawn(move || tx.send(Msg::Health(name, mcp::probe(&def))));
+        }
+    }
+    fn search_registry(&mut self) {
+        if self.filter.trim().len() < 2 {
+            return;
+        }
+        let (tx, hub, q) = (self.tx.clone(), self.cx.hub(), self.filter.clone());
+        self.searching = true;
+        thread::spawn(move || tx.send(Msg::Found(add::search_skills(&hub, &q))));
+    }
+    fn on_msg(&mut self, m: Msg) {
+        match m {
+            Msg::Outdated(ids) => {
+                self.outdated = ids;
+                self.checking_updates = false;
+            }
+            Msg::Health(n, h) => {
+                self.health.insert(n, h);
+            }
+            Msg::Found(found) => {
+                self.searching = false;
+                self.entries.retain(|e| !is_found(e));
+                if found.is_empty() {
+                    self.toast = Some((format!("skills.sh: nothing for “{}”", self.filter), false));
+                }
+                self.entries.extend(found);
+                self.clamp();
+            }
+        }
     }
     fn current(&self) -> Option<usize> {
         self.visible().get(self.table.selected()?).copied()
@@ -82,7 +173,11 @@ impl App {
     }
     fn reload(&mut self) {
         self.cx = Ctx::load();
+        let hub = self.cx.hub();
+        let found: Vec<Entry> = self.entries.drain(..).filter(|e| is_found(e) && !hub.join(e.id.rsplit('@').next().unwrap_or_default()).exists()).collect();
         self.entries = load_entries(&self.cx);
+        self.entries.extend(add::catalog(&self.cx));
+        self.entries.extend(found);
         self.marked.retain(|id| self.entries.iter().any(|e| &e.id == id));
         self.clamp();
     }
@@ -115,6 +210,16 @@ fn kind_glyph(k: Kind) -> (&'static str, Color) {
         Kind::Skill => ("◇", SKILL_C),
         Kind::Plugin => ("▣", PLUGIN_C),
         Kind::Mcp => ("⌁", MCP_C),
+        Kind::Catalog => ("↓", DIM),
+    }
+}
+
+fn health_span(h: &Health) -> Span<'static> {
+    match h {
+        Health::Checking => Span::styled("  …", Style::new().fg(FAINT)),
+        Health::Live => Span::styled("  live", Style::new().fg(OK)),
+        Health::Login => Span::styled("  oauth", Style::new().fg(WARN)),
+        Health::Down(_) => Span::styled("  down", Style::new().fg(BAD)),
     }
 }
 
@@ -133,7 +238,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     // header
     let skills = app.entries.iter().filter(|e| e.kind == Kind::Skill).count();
     let plugins = app.entries.iter().filter(|e| e.kind == Kind::Plugin).count();
-    let mcps = app.entries.len() - skills - plugins;
+    let mcps = app.entries.iter().filter(|e| e.kind == Kind::Mcp).count();
     let mut title = vec![Span::styled("✻ skillz", Style::new().fg(ACCENT).bold()), Span::styled("  skills, plugins & MCP for ", Style::new().fg(DIM))];
     for (i, p) in agents.iter().enumerate() {
         if i > 0 {
@@ -146,6 +251,12 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let mut right = vec![Span::styled(format!("{skills} skills · {plugins} plugins · {mcps} mcp"), Style::new().fg(DIM))];
     if dups > 0 {
         right.push(Span::styled(format!("  ⚠ {dups} duplicates"), Style::new().fg(WARN).bold()));
+    }
+    if app.checking_updates {
+        right.push(Span::styled("  checking updates…", Style::new().fg(FAINT)));
+    } else if !app.outdated.is_empty() {
+        let n = app.entries.iter().filter(|e| app.outdated.contains(&e.id)).count();
+        right.push(Span::styled(format!("  ⬆ {n} updates"), Style::new().fg(OK).bold()));
     }
     f.render_widget(Paragraph::new(Line::from(right)).alignment(Alignment::Right), head);
 
@@ -170,21 +281,21 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     // tabs + search
     // while searching, tabs count matches
-    let hits = |k: Option<Kind>| app.entries.iter().filter(|e| k.is_none_or(|k| e.kind == k) && e.matches(&app.filter)).count();
-    let counts = [hits(None), hits(Some(Kind::Skill)), hits(Some(Kind::Plugin)), hits(Some(Kind::Mcp))];
-    let tabs = Tabs::new((0..4).map(|i| format!("{} {}", TABS[i], counts[i])))
+    let tabs = Tabs::new((0..TABS.len()).map(|i| format!("{} {}", TABS[i], app.visible_in(i).len())))
         .select(app.tab)
         .style(Style::new().fg(DIM))
         .highlight_style(Style::new().fg(ACCENT).bold().underlined())
         .divider(Span::styled("│", Style::new().fg(FAINT)))
         .padding(" ", " ");
     f.render_widget(tabs, bar);
-    let search = if app.typing {
+    let search = if app.searching {
+        Line::from(Span::styled(format!("⌕ searching skills.sh for “{}”…", app.filter), Style::new().fg(ACCENT)))
+    } else if app.typing {
         Line::from(vec![Span::styled("⌕ ", Style::new().fg(ACCENT)), Span::raw(app.filter.clone()), Span::styled("▏", Style::new().fg(ACCENT))])
     } else if !app.filter.is_empty() {
         Line::from(vec![Span::styled("⌕ ", Style::new().fg(DIM)), Span::styled(app.filter.clone(), Style::new().fg(Color::White))])
     } else {
-        Line::from(Span::styled("⌕ / to search", Style::new().fg(FAINT)))
+        Line::from(Span::styled(if app.tab == BROWSE { "⌕ / to search marketplaces + skills.sh" } else { "⌕ / to search" }, Style::new().fg(FAINT)))
     };
     f.render_widget(Paragraph::new(search).alignment(Alignment::Right), bar);
 
@@ -200,10 +311,18 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         if !e.dups.is_empty() {
             name.push(Span::styled("⚠ ", Style::new().fg(WARN)));
         }
-        match e.id.strip_prefix(crate::mcp::PREFIX).map(|n| (n, "")).or(e.id.split_once('@')) {
+        match e.id.strip_prefix(mcp::PREFIX).map(|n| (n, "")).or(e.id.split_once('@')) {
             Some((n, "")) => name.push(Span::raw(n.to_string())),
+            // skills.sh: owner/repo@skill -> skill first
+            Some((repo, skill)) if is_found(e) => name.extend([Span::raw(skill.to_string()), Span::styled(format!("  {repo}"), Style::new().fg(FAINT))]),
             Some((n, m)) => name.extend([Span::raw(n.to_string()), Span::styled(format!("@{m}"), Style::new().fg(FAINT))]),
             None => name.push(Span::raw(e.id.clone())),
+        }
+        if app.outdated.contains(&e.id) {
+            name.push(Span::styled(" ⬆", Style::new().fg(OK).bold()));
+        }
+        if let Some(h) = app.health.get(mcp::name_of(&e.id)).filter(|_| e.kind == Kind::Mcp) {
+            name.push(health_span(h));
         }
         let mut cells = vec![Cell::from(Line::from(name))];
         cells.extend(agents.iter().map(|&p| Cell::from(Line::from(dot(e.vis.get(&p), p)).alignment(Alignment::Center))));
@@ -221,7 +340,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         .highlight_spacing(ratatui::widgets::HighlightSpacing::Always);
     f.render_stateful_widget(table, list_area, &mut app.table);
     if vis.is_empty() {
-        let msg = Paragraph::new(Span::styled(format!("nothing matches “{}”", app.filter), Style::new().fg(DIM))).alignment(Alignment::Center);
+        let text = if app.tab == BROWSE && !app.filter.is_empty() { format!("nothing in your marketplaces for “{}” · enter searches skills.sh", app.filter) } else { format!("nothing matches “{}”", app.filter) };
+        let msg = Paragraph::new(Span::styled(text, Style::new().fg(DIM))).alignment(Alignment::Center).wrap(Wrap { trim: true });
         f.render_widget(msg, list_area.inner(Margin::new(1, list_area.height / 2)));
     }
     let rows_fit = list_area.height.saturating_sub(3) as usize;
@@ -239,8 +359,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let foot_line = if let Some((m, ok)) = &app.toast {
         let (icon, c) = if *ok { ("✓ ", OK) } else { ("✗ ", BAD) };
         Line::from(vec![Span::styled(icon, Style::new().fg(c).bold()), Span::styled(m.clone(), Style::new().fg(c))])
+    } else if app.adding.is_some() {
+        Line::from([chip("enter", "install"), chip("esc", "cancel")].concat())
     } else if app.typing {
-        Line::from([chip("enter", "keep"), chip("esc", "clear")].concat())
+        let enter = if app.tab == BROWSE { "search skills.sh" } else { "keep" };
+        Line::from([chip("enter", enter), chip("esc", "clear")].concat())
     } else {
         let mut keys = Vec::new();
         if !app.marked.is_empty() {
@@ -249,13 +372,27 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             keys.extend(chip("esc", "unselect"));
         }
         let n = format!("1-{}", agents.len());
-        for (k, l) in [(n.as_str(), "toggle"), ("a", "all"), ("space", "select"), ("*", "select shown"), ("u", "update"), ("U", "update all"), ("s", "sync"), ("d", "delete"), ("tab", "view"), ("/", "search"), ("q", "quit")] {
+        let on_mcp = app.current().is_some_and(|i| app.entries[i].kind == Kind::Mcp);
+        let chips: Vec<(&str, &str)> = if app.tab == BROWSE {
+            vec![("i", "install"), ("space", "select"), ("/", "search"), ("+", "add other"), ("tab", "view"), ("q", "quit")]
+        } else {
+            let mut v = vec![(n.as_str(), "toggle"), ("a", "all"), ("space", "select"), ("+", "add"), ("u", "update"), ("U", "update all")];
+            if on_mcp {
+                v.push(("o", "login"));
+            }
+            v.extend([("c", "check"), ("s", "sync"), ("d", "delete"), ("/", "search"), ("q", "quit")]);
+            v
+        };
+        for (k, l) in chips {
             keys.extend(chip(k, l));
         }
         Line::from(keys)
     };
     f.render_widget(Paragraph::new(foot_line), foot);
 
+    if let Some(input) = &app.adding {
+        draw_add(f, input);
+    }
     if app.confirm_delete {
         let ids: Vec<&str> = app.targets().iter().map(|&i| app.entries[i].id.as_str()).collect();
         if !ids.is_empty() {
@@ -276,6 +413,7 @@ fn draw_details(f: &mut Frame, app: &App, area: Rect) {
         Kind::Skill => (" SKILL ", SKILL_C),
         Kind::Plugin => (" PLUGIN ", PLUGIN_C),
         Kind::Mcp => (" MCP ", MCP_C),
+        Kind::Catalog => (" AVAILABLE ", OK),
     };
     let mut lines = vec![
         Line::from(Span::styled(e.id.clone(), Style::new().fg(Color::White).bold())),
@@ -290,6 +428,26 @@ fn draw_details(f: &mut Frame, app: &App, area: Rect) {
     let desc = if e.desc.is_empty() { "no description".to_string() } else { e.desc.clone() };
     lines.push(Line::from(Span::styled(desc, Style::new().fg(Color::Rgb(200, 200, 210)))));
     lines.push(Line::default());
+    if e.kind == Kind::Catalog {
+        lines.push(Line::from(Span::styled("not installed · i installs it and syncs it to every agent", Style::new().fg(OK))));
+        lines.push(Line::from(Span::styled(format!("  $ {}", add::catalog_cmd(&e.id).join(" ")), Style::new().fg(FAINT))));
+        f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }).block(block), area);
+        return;
+    }
+    if app.outdated.contains(&e.id) {
+        lines.push(Line::from(Span::styled("⬆ update available · u updates it", Style::new().fg(OK).bold())));
+        lines.push(Line::default());
+    }
+    if let Some(h) = app.health.get(mcp::name_of(&e.id)).filter(|_| e.kind == Kind::Mcp) {
+        let (t, c) = match h {
+            Health::Checking => ("checking…".to_string(), FAINT),
+            Health::Live => ("live · answers MCP initialize".to_string(), OK),
+            Health::Login => ("up, OAuth · each agent logs in once (o)".to_string(), WARN),
+            Health::Down(why) => (format!("down · {why}"), BAD),
+        };
+        lines.push(Line::from(vec![Span::styled("STATUS  ", Style::new().fg(DIM).bold()), Span::styled(t, Style::new().fg(c))]));
+        lines.push(Line::default());
+    }
     lines.push(Line::from(Span::styled("VISIBLE IN", Style::new().fg(DIM).bold())));
     for (n, &p) in app.cx.agents.iter().enumerate() {
         let v = e.vis.get(&p);
@@ -321,7 +479,6 @@ fn draw_details(f: &mut Frame, app: &App, area: Rect) {
         for (p, d) in &e.mcp {
             lines.push(Line::from(vec![Span::styled(format!("  {:<9}", p.name()), Style::new().fg(pcolor(*p))), Span::styled(crate::mcp::summary(d), Style::new().fg(FAINT))]));
         }
-        lines.push(Line::from(Span::styled("  OAuth servers need a login in each agent (e.g. omp: /mcp reauth <name>)", Style::new().fg(DIM).italic())));
     }
     if e.claude_copy {
         lines.push(Line::from(Span::styled("  Claude uses its own copy (parked in ~/.agents/disabled when off)", Style::new().fg(DIM).italic())));
@@ -352,6 +509,25 @@ fn draw_details(f: &mut Frame, app: &App, area: Rect) {
         }
     }
     f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }).block(block), area);
+}
+
+fn draw_add(f: &mut Frame, input: &str) {
+    let [r] = Layout::horizontal([Constraint::Length(90)]).flex(Flex::Center).areas(f.area());
+    let [r] = Layout::vertical([Constraint::Length(12)]).flex(Flex::Center).areas(r);
+    f.render_widget(Clear, r);
+    let ex = |a: &str, b: &str| Line::from(vec![Span::styled(format!("  {a:<38}"), Style::new().fg(Color::White)), Span::styled(b.to_string(), Style::new().fg(DIM))]);
+    let text = vec![
+        Line::from(vec![Span::styled("❯ ", Style::new().fg(ACCENT).bold()), Span::raw(input.to_string()), Span::styled("▏", Style::new().fg(ACCENT))]),
+        Line::default(),
+        ex("owner/repo", "skills repo, or a plugin marketplace"),
+        ex("owner/repo@skill", "one skill"),
+        ex("plugin@marketplace", "a Claude plugin"),
+        ex("https://example.com/mcp", "MCP server (named from the host)"),
+        ex("name https://…  ·  mcp name cmd args…", "MCP server with your name"),
+        Line::default(),
+        Line::from(Span::styled("installs, then syncs to every agent", Style::new().fg(FAINT))),
+    ];
+    f.render_widget(Paragraph::new(text).block(rounded("add", ACCENT).padding(Padding::new(2, 2, 1, 0))), r);
 }
 
 fn draw_confirm(f: &mut Frame, ids: &[&str]) {
@@ -395,8 +571,44 @@ fn finish(term: &mut DefaultTerminal, app: &mut App, res: io::Result<Cmds>, ok_m
     app.reload();
 }
 
+/// Run installers, then sync so the new things reach every agent.
+fn install(term: &mut DefaultTerminal, app: &mut App, cmds: Cmds, label: String) {
+    let ok = run_visible(term, &cmds);
+    app.reload();
+    let r = sync::sync(&mut app.cx, true).map(|r| r.cmds);
+    finish(term, app, r, if ok { format!("{label} installed · synced to every agent") } else { format!("{label}: install failed") });
+    app.check_updates();
+}
+
+fn submit_add(term: &mut DefaultTerminal, app: &mut App, input: &str) {
+    let plan = match add::parse(input) {
+        Ok(p) => add::resolve(p),
+        Err(e) => return app.err(e),
+    };
+    match &plan {
+        add::Plan::Mcp { name, target } => {
+            let r = mcp::add(&mut app.cx, name, target).map(|_| vec![]);
+            finish(term, app, r, format!("mcp:{name} added to every agent"));
+            app.check_health();
+        }
+        add::Plan::Marketplace { install: None, .. } => {
+            let ok = run_visible(term, &add::cmds(&plan));
+            app.reload();
+            if ok {
+                app.tab = BROWSE;
+                app.ok(format!("marketplace {input} added · pick its plugins here"));
+            } else {
+                app.err("adding the marketplace failed");
+            }
+        }
+        _ => install(term, app, add::cmds(&plan), input.to_string()),
+    }
+}
+
 pub fn main() -> io::Result<()> {
     let mut app = App::new();
+    app.check_updates();
+    app.check_health();
     let mut term = ratatui::init();
     let res = run(&mut term, &mut app);
     ratatui::restore();
@@ -405,17 +617,45 @@ pub fn main() -> io::Result<()> {
 
 fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
     loop {
+        while let Ok(m) = app.rx.try_recv() {
+            app.on_msg(m);
+        }
         term.draw(|f| draw(f, app))?;
+        // wake up regularly so background results show without a key press
+        if !event::poll(Duration::from_millis(200))? {
+            continue;
+        }
         let Event::Key(k) = event::read()? else { continue };
         if k.kind != KeyEventKind::Press {
             continue;
         }
+        if let Some(input) = app.adding.as_mut() {
+            match k.code {
+                KeyCode::Esc => app.adding = None,
+                KeyCode::Backspace => {
+                    input.pop();
+                }
+                KeyCode::Char(c) => input.push(c),
+                KeyCode::Enter => {
+                    let input = app.adding.take().unwrap_or_default();
+                    submit_add(term, app, &input);
+                }
+                _ => {}
+            }
+            continue;
+        }
         if app.typing {
             match k.code {
-                KeyCode::Enter => app.typing = false,
+                KeyCode::Enter => {
+                    app.typing = false;
+                    if app.tab == BROWSE {
+                        app.search_registry();
+                    }
+                }
                 KeyCode::Esc => {
                     app.typing = false;
                     app.filter.clear();
+                    app.entries.retain(|e| !is_found(e));
                 }
                 KeyCode::Backspace => {
                     app.filter.pop();
@@ -475,6 +715,7 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
             }
             KeyCode::Esc if !app.filter.is_empty() => {
                 app.filter.clear();
+                app.entries.retain(|e| !is_found(e));
                 app.clamp();
             }
             KeyCode::Esc => return Ok(()),
@@ -503,6 +744,37 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                 app.ok("reloaded");
             }
             KeyCode::Char('d') if !app.targets().is_empty() => app.confirm_delete = true,
+            KeyCode::Char('+') => app.adding = Some(String::new()),
+            KeyCode::Char('i') | KeyCode::Enter if app.tab == BROWSE => {
+                let idx: Vec<usize> = app.targets().into_iter().filter(|&i| app.entries[i].kind == Kind::Catalog).collect();
+                if idx.is_empty() {
+                    continue;
+                }
+                let cmds: Cmds = idx.iter().map(|&i| add::catalog_cmd(&app.entries[i].id)).collect();
+                let label = match idx.as_slice() {
+                    [i] => app.entries[*i].id.clone(),
+                    _ => format!("{} items", idx.len()),
+                };
+                app.marked.clear();
+                install(term, app, cmds, label);
+            }
+            KeyCode::Char('o') => {
+                let Some(i) = app.current().filter(|&i| app.entries[i].kind == Kind::Mcp) else { continue };
+                let (cmds, hints) = mcp::login_cmds(&app.entries[i]);
+                if !cmds.is_empty() {
+                    run_visible(term, &cmds);
+                }
+                match (cmds.is_empty(), hints.is_empty()) {
+                    (true, true) => app.err("no agent has this server on"),
+                    (_, true) => app.ok("logged in"),
+                    (_, false) => app.ok(format!("{}inside the agent: {}", if cmds.is_empty() { "" } else { "CLI logins done · " }, hints.join(" · "))),
+                }
+            }
+            KeyCode::Char('c') => {
+                app.check_updates();
+                app.check_health();
+                app.ok("checking updates and MCP servers…");
+            }
             KeyCode::Char('s') => {
                 let r = sync::sync(&mut app.cx, true).map(|r| r.cmds);
                 finish(term, app, r, "synced".into());
@@ -512,6 +784,7 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                 let ok = run_visible(term, &cmds);
                 let r = sync::sync(&mut app.cx, true).map(|r| r.cmds);
                 finish(term, app, r, if ok { "everything updated".into() } else { "updated - some steps failed".into() });
+                app.check_updates();
             }
             KeyCode::Char('u') => {
                 let idx = app.targets();
@@ -525,6 +798,7 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                 } else {
                     app.marked.clear();
                     finish(term, app, Ok(cmds), format!("{label} updated"));
+                    app.check_updates();
                 }
             }
             KeyCode::Char(c @ ('1'..='9' | 'a')) => {

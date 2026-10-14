@@ -470,6 +470,117 @@ pub fn new_entry(name: &str, target: &[String]) -> io::Result<Entry> {
     })
 }
 
+/// Add a new server to every agent (`skillz mcp add`, `+` in the TUI).
+pub fn add(cx: &mut Ctx, name: &str, target: &[String]) -> io::Result<()> {
+    if load(cx).iter().any(|e| name_of(&e.id) == name) {
+        return Err(io::Error::other(format!("MCP server '{name}' already exists; `skillz enable mcp:{name}` spreads it")));
+    }
+    let e = new_entry(name, target)?;
+    for p in cx.agents.clone() {
+        crate::model::set(cx, &e, p, true, false)?;
+    }
+    Ok(())
+}
+
+// ---------- live status ----------
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Health {
+    Checking,
+    Live,
+    /// Answers, but wants an OAuth login (HTTP 401/403).
+    Login,
+    Down(String),
+}
+
+const INIT: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"skillz","version":"0"}}}"#;
+
+/// Talk MCP to the server once: `initialize` over HTTP (curl) or stdio (spawned, then killed).
+pub fn probe(d: &Value) -> Health {
+    match d["url"].as_str() {
+        Some(url) => {
+            let sse = d["type"] == "sse";
+            let mut a = sv(&["-s", "-o", "/dev/null", "-w", "%{http_code}", "-m", if sse { "4" } else { "8" }]);
+            if !sse {
+                a.extend(sv(&["-X", "POST", "-H", "Content-Type: application/json", "-H", "Accept: application/json, text/event-stream", "-d", INIT]));
+            }
+            for (k, v) in d["headers"].as_object().into_iter().flatten() {
+                a.extend(["-H".into(), format!("{k}: {}", v.as_str().unwrap_or_default())]);
+            }
+            a.push(url.into());
+            let code = std::process::Command::new("curl").args(&a).output().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
+            match code.trim() {
+                "401" | "403" => Health::Login,
+                c if c.starts_with('2') => Health::Live,
+                "000" | "" => Health::Down("unreachable".into()),
+                c => Health::Down(format!("HTTP {c}")),
+            }
+        }
+        None => probe_stdio(d),
+    }
+}
+
+fn probe_stdio(d: &Value) -> Health {
+    use std::io::{BufRead, Write};
+    use std::process::{Command, Stdio};
+    let Some(cmd) = d["command"].as_str() else { return Health::Down("no command".into()) };
+    let mut c = Command::new(cmd);
+    c.args(d["args"].as_array().into_iter().flatten().filter_map(|a| a.as_str()));
+    for (k, v) in d["env"].as_object().into_iter().flatten() {
+        c.env(k, v.as_str().unwrap_or_default());
+    }
+    if let Some(w) = d["cwd"].as_str() {
+        c.current_dir(w);
+    }
+    let mut child = match c.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() {
+        Ok(ch) => ch,
+        Err(e) => return Health::Down(format!("can't start: {e}")),
+    };
+    // stdin stays open until the end: some servers quit on EOF before answering
+    let mut stdin = child.stdin.take().unwrap();
+    let _ = writeln!(stdin, "{INIT}");
+    let out = child.stdout.take().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(out).lines().map_while(Result::ok) {
+            if serde_json::from_str::<Value>(&line).is_ok_and(|v| v["id"] == 1 && v.get("result").is_some()) {
+                let _ = tx.send(());
+                return;
+            }
+        }
+    });
+    // first runs of npx/uvx servers download packages, so be patient
+    let h = match rx.recv_timeout(std::time::Duration::from_secs(25)) {
+        Ok(()) => Health::Live,
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Health::Down("exited at startup".into()),
+        Err(_) => Health::Down("no reply in 25s".into()),
+    };
+    drop(stdin);
+    let _ = child.kill();
+    let _ = child.wait();
+    h
+}
+
+/// OAuth login commands for agents that have one in their CLI; the rest log in from inside the agent.
+pub fn login_cmds(e: &Entry) -> (Cmds, Vec<String>) {
+    let n = name_of(&e.id);
+    let on = |p: P| e.vis.get(&p) == Some(&Vis::On);
+    let mut cmds = Vec::new();
+    if on(P::Codex) && has_cmd("codex") {
+        cmds.push(sv(&["codex", "mcp", "login", n]));
+    }
+    if on(P::OpenCode) && has_cmd("opencode") {
+        cmds.push(sv(&["opencode", "mcp", "auth", n]));
+    }
+    let mut hints = Vec::new();
+    for (p, how) in [(P::Claude, "/mcp".to_string()), (P::Omp, format!("/mcp reauth {n}")), (P::Gemini, format!("/mcp auth {n}"))] {
+        if on(p) {
+            hints.push(format!("{}: {how}", p.name()));
+        }
+    }
+    (cmds, hints)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -514,6 +625,13 @@ mod tests {
         let mut oc = json!({"mcp": {"a": {"type": "local", "command": ["x"], "enabled": false}, "servers": {"b": {"type": "remote", "url": "u"}}}});
         oc_servers(&mut oc);
         assert_eq!(oc, json!({"mcp": {"servers": {"b": {"type": "remote", "url": "u"}, "a": {"type": "local", "command": ["x"], "disabled": true}}}}));
+    }
+
+    #[test]
+    fn probes_report_dead_servers() {
+        assert_eq!(probe(&json!({"type": "http", "url": "http://127.0.0.1:9/mcp"})), Health::Down("unreachable".into()));
+        assert!(matches!(probe(&json!({"type": "stdio", "command": "/nonexistent/x"})), Health::Down(_)));
+        assert_eq!(probe(&json!({"type": "stdio", "command": "true"})), Health::Down("exited at startup".into()));
     }
 
     #[test]

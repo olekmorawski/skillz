@@ -78,6 +78,8 @@ pub enum Kind {
     Skill,
     Plugin,
     Mcp,
+    /// Not installed: a Browse row (marketplace plugin or skills.sh skill).
+    Catalog,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -704,6 +706,7 @@ pub fn set(cx: &mut Ctx, e: &Entry, p: P, on: bool, remember: bool) -> io::Resul
             return Err(io::Error::other(format!("{} always loads ~/.agents/skills and has no per-skill switch", p.name())));
         }
         (_, Kind::Mcp) => crate::mcp::set(cx, e, p, on)?,
+        (_, Kind::Catalog) => return Err(io::Error::other(format!("{} isn't installed (i installs it)", e.id))),
         (P::Claude, Kind::Skill) => {
             if let Some(cmd) = &e.claude_cmd {
                 let (live, parked) = (h.join(".claude/commands").join(cmd), h.join(DISABLED).join("claude-commands").join(cmd));
@@ -871,6 +874,7 @@ pub fn purge(cx: &mut Ctx, e: &Entry) -> io::Result<Cmds> {
             cmds.push(sv(&["rm", "-rf", &h.join(".claude/plugins/cache").join(mkt).join(pname).to_string_lossy()]));
         }
         Kind::Mcp => crate::mcp::purge(cx, e),
+        Kind::Catalog => return Err(io::Error::other(format!("{} isn't installed", e.id))),
     }
     cx.forget(&e.id);
     Ok(cmds)
@@ -880,7 +884,7 @@ pub fn update_cmds(cx: &Ctx, e: &Entry) -> Cmds {
     match e.kind {
         Kind::Skill if e.in_lock => vec![sv(&["npx", "-y", "skills", "update", &e.id, "-g", "-y"])],
         Kind::Skill if e.path.join(".git").exists() => vec![sv(&["git", "-C", &e.path.to_string_lossy(), "pull", "--ff-only"])],
-        Kind::Skill | Kind::Mcp => vec![],
+        Kind::Skill | Kind::Mcp | Kind::Catalog => vec![],
         Kind::Plugin => {
             let mut v = vec![sv(&["claude", "plugin", "update", &e.id])];
             if e.omp_native && cx.agents.contains(&P::Omp) {

@@ -99,24 +99,32 @@ Choices you make are remembered in `~/.agents/skillz.json`, so `skillz sync` nev
 | Key | Action |
 |---|---|
 | `1` … `5` | switch the selected row for that agent (numbers match the cards at the top) |
+| `+` | add anything: `owner/repo`, `owner/repo@skill`, `plugin@marketplace`, an MCP URL, `name <url>` or `mcp name cmd…`; it installs, then syncs to every agent |
+| `i` / `enter` | in **Browse**: install the selected (or every marked) row |
+| `o` | on an MCP server: run the OAuth logins agents offer in their CLI (Codex, OpenCode) and show how the rest log in |
+| `c` | check again: updates upstream and MCP server status |
 | `space` | select / unselect the row; `1`–`5`, `a`, `u` and `d` then act on every selected row |
 | `*` | select every row shown, e.g. after a search (again to unselect); `esc` clears the selection |
 | `a` | all agents on, or all off if they're already all on |
 | `u` / `U` | update the selected row / update everything |
 | `s` | sync (link new skills, follow plugins to every agent, clean broken links) |
 | `d` | **remove completely** (see below) |
-| `tab` `←` `→` | All / Skills / Plugins / MCP |
+| `tab` `←` `→` | All / Skills / Plugins / MCP / Browse |
 | `/` | search: name, source, description, a plugin's skills, an MCP server's command or URL (every word must match); `esc` clears |
 | `↑↓` `j k` `g G` `PgUp PgDn` | move |
 | `r` / `q` | reload / quit |
 
-Symbols: `◇` skill · `▣` plugin · `⌁` MCP server · `●` visible · `○` hidden · `◆` always visible (the agent has no switch) · `·` doesn't apply (e.g. an LSP-only plugin has nothing Gemini can load) · `⚠` duplicate.
+Symbols: `◇` skill · `▣` plugin · `⌁` MCP server · `↓` available to install · `⬆` update available · `●` visible · `○` hidden · `◆` always visible (the agent has no switch) · `·` doesn't apply (e.g. an LSP-only plugin has nothing Gemini can load) · `⚠` duplicate.
 
 ## CLI
 
 ```sh
 skillz list                         # the table, in plain text
 skillz search caveman               # only what matches (same as `skillz list caveman`)
+skillz find caveman                 # what you could install: skills.sh + your plugin marketplaces
+skillz add juliusbrussee/caveman    # install (same inputs as `+` in the TUI), then sync
+skillz outdated                     # what has an update upstream
+skillz mcp status                   # each MCP server: live, OAuth, or down (and why)
 skillz sync                         # what's out of sync (dry run)
 skillz sync --apply                 # fix it
 skillz update                       # npx skills update, claude/codex/omp plugin updates, then sync
@@ -137,6 +145,12 @@ Plugins are addressed by id (`ponytail@ponytail`) or by bare name when it's uniq
 - **Skill:** the hub folder and its `npx skills` lock entry, every agent's copy or symlink (`~/.claude`, `~/.codex`, `~/.gemini`, `~/.config/opencode`, `~/.omp`, `~/.pi`), parked copies, and every on/off rule that mentions it.
 - **MCP server:** its entry in every agent's config, Claude's project scopes, parked copies and every on/off rule.
 - **Plugin:** the Claude Code install and all cached versions, the Codex plugin, omp entries, the OpenCode plugin entry, every `<plugin>--*` link, `enabledPlugins` and remembered choices.
+
+## Browse, updates and status
+
+- **Browse** lists every plugin from the marketplaces Claude Code knows that you haven't installed. Search with `/`, then press `enter` to also search [skills.sh](https://skills.sh), the registry behind `npx skills`. Mark several rows with `space`, then press `i` to install them all.
+- **⬆ updates** are checked in the background when skillz starts. For hub skills, the folder hash in `npx skills`' lock is compared with the repo's current git tree, with one GitHub request per repo (it uses `gh api` when available). For plugins, the installed version is compared with the version the marketplace (or the plugin's own `plugin.json`) declares now. Plugins versioned only by commit can't be compared, so they never show ⬆.
+- **MCP status** sends each server a real MCP `initialize`. HTTP servers get a POST; stdio servers are started, asked, and stopped. `live` means it answered. `oauth` means it's up and wants a login, which each agent does once. `down` comes with the reason: unreachable, can't start, exited, or no reply in 25 s.
 
 ## Duplicates
 
@@ -160,6 +174,12 @@ SKILLZ_SVG=docs/screenshot.svg cargo test screenshot -- --ignored   # regenerate
 The screenshot is the real TUI render from a demo `$HOME` (`src/demo.rs`), exported to SVG.
 
 ## Changelog
+
+**0.3.0**
+- `+` installs anything from one input line: skills repos, single skills, plugin marketplaces (a marketplace with one plugin gets it installed), plugins and MCP servers. Then it syncs. Same inputs: `skillz add`.
+- Browse tab: uninstalled plugins from your marketplaces, plus skills.sh search. Multi-select install. CLI: `skillz find`.
+- ⬆ update badges from a background check of GitHub. CLI: `skillz outdated`.
+- Live MCP status (`live` / `oauth` / `down` + reason), `o` for logins, `c` to re-check. CLI: `skillz mcp status`.
 
 **0.2.2**
 - Multi-select: `space` picks rows, `*` picks everything shown. Switching, updating and removing then apply to the whole selection. With a mixed selection, a switch turns the agent on for all rows unless all are already on.

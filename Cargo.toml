@@ -1,8 +1,8 @@
 [package]
 name = "skillz"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2024"
-description = "One TUI to manage agent skills, plugins & MCP servers across Claude Code, Codex, omp, OpenCode and Gemini CLI"
+description = "One TUI to find, install, update and manage agent skills, plugins & MCP servers across Claude Code, Codex, omp, OpenCode and Gemini CLI"
 license = "MIT"
 repository = "https://github.com/olekmorawski/skillz"
 

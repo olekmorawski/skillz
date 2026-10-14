@@ -76,7 +76,7 @@ pub fn sync(cx: &mut Ctx, apply: bool) -> io::Result<Report> {
                     }
                 }
             }
-            Kind::Mcp => {}
+            Kind::Mcp | Kind::Catalog => {}
         }
     }
 

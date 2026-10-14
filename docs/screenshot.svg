@@ -91,7 +91,9 @@
 <text x="190" y="129.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
 <text x="198.6" y="129.68" fill="#737380" xml:space="preserve" textLength="94.600006" lengthAdjust="spacingAndGlyphs"> Plugins 2 </text>
 <text x="293.2" y="129.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
-<text x="301.80002" y="129.68" fill="#737380" xml:space="preserve" textLength="731.00006" lengthAdjust="spacingAndGlyphs"> MCP 2                                                                               </text>
+<text x="301.80002" y="129.68" fill="#737380" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> MCP 2 </text>
+<text x="362" y="129.68" fill="#464652" xml:space="preserve" textLength="8.6" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="370.6" y="129.68" fill="#737380" xml:space="preserve" textLength="662.2" lengthAdjust="spacingAndGlyphs"> Browse 0                                                                    </text>
 <text x="1032.8" y="129.68" fill="#464652" xml:space="preserve" textLength="111.8" lengthAdjust="spacingAndGlyphs">⌕ / to search</text>
 
 
@@ -461,19 +463,21 @@
 <text x="172.8" y="509.68" fill="#737380" xml:space="preserve" textLength="51.600002" lengthAdjust="spacingAndGlyphs"> all  </text>
 <rect x="224.40001" y="496" width="60.200005" height="19" fill="#373742"/><text x="224.40001" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> space </text>
 <text x="284.6" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> select  </text>
-<rect x="362" y="496" width="25.800001" height="19" fill="#373742"/><text x="362" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> * </text>
-<text x="387.80002" y="509.68" fill="#737380" xml:space="preserve" textLength="129" lengthAdjust="spacingAndGlyphs"> select shown  </text>
-<rect x="516.80005" y="496" width="25.800001" height="19" fill="#373742"/><text x="516.80005" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> u </text>
-<text x="542.60004" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> update  </text>
-<rect x="620" y="496" width="25.800001" height="19" fill="#373742"/><text x="620" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> U </text>
-<text x="645.80005" y="509.68" fill="#737380" xml:space="preserve" textLength="111.8" lengthAdjust="spacingAndGlyphs"> update all  </text>
-<rect x="757.60004" y="496" width="25.800001" height="19" fill="#373742"/><text x="757.60004" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> s </text>
-<text x="783.4" y="509.68" fill="#737380" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> sync  </text>
-<rect x="843.60004" y="496" width="25.800001" height="19" fill="#373742"/><text x="843.60004" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> d </text>
-<text x="869.4" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> delete  </text>
-<rect x="946.80005" y="496" width="43" height="19" fill="#373742"/><text x="946.80005" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="43" lengthAdjust="spacingAndGlyphs"> tab </text>
-<text x="989.80005" y="509.68" fill="#737380" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> view  </text>
-<rect x="1050" y="496" width="25.800001" height="19" fill="#373742"/><text x="1050" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> / </text>
-<text x="1075.8" y="509.68" fill="#737380" xml:space="preserve" textLength="68.8" lengthAdjust="spacingAndGlyphs"> search </text>
+<rect x="362" y="496" width="25.800001" height="19" fill="#373742"/><text x="362" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> + </text>
+<text x="387.80002" y="509.68" fill="#737380" xml:space="preserve" textLength="51.600002" lengthAdjust="spacingAndGlyphs"> add  </text>
+<rect x="439.40002" y="496" width="25.800001" height="19" fill="#373742"/><text x="439.40002" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> u </text>
+<text x="465.2" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> update  </text>
+<rect x="542.60004" y="496" width="25.800001" height="19" fill="#373742"/><text x="542.60004" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> U </text>
+<text x="568.4" y="509.68" fill="#737380" xml:space="preserve" textLength="111.8" lengthAdjust="spacingAndGlyphs"> update all  </text>
+<rect x="680.2" y="496" width="25.800001" height="19" fill="#373742"/><text x="680.2" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> c </text>
+<text x="706" y="509.68" fill="#737380" xml:space="preserve" textLength="68.8" lengthAdjust="spacingAndGlyphs"> check  </text>
+<rect x="774.80005" y="496" width="25.800001" height="19" fill="#373742"/><text x="774.80005" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> s </text>
+<text x="800.60004" y="509.68" fill="#737380" xml:space="preserve" textLength="60.200005" lengthAdjust="spacingAndGlyphs"> sync  </text>
+<rect x="860.80005" y="496" width="25.800001" height="19" fill="#373742"/><text x="860.80005" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> d </text>
+<text x="886.60004" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> delete  </text>
+<rect x="964.00006" y="496" width="25.800001" height="19" fill="#373742"/><text x="964.00006" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> / </text>
+<text x="989.80005" y="509.68" fill="#737380" xml:space="preserve" textLength="77.4" lengthAdjust="spacingAndGlyphs"> search  </text>
+<rect x="1067.2001" y="496" width="25.800001" height="19" fill="#373742"/><text x="1067.2001" y="509.68" fill="#f2f2f5" font-weight="700" xml:space="preserve" textLength="25.800001" lengthAdjust="spacingAndGlyphs"> q </text>
+<text x="1093" y="509.68" fill="#737380" xml:space="preserve" textLength="51.600002" lengthAdjust="spacingAndGlyphs"> quit </text>
 
 </svg>

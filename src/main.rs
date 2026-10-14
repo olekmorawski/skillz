@@ -1,9 +1,12 @@
 #[cfg(test)]
 mod demo;
+mod add;
 mod mcp;
 mod model;
+mod net;
 mod sync;
 mod ui;
+mod updates;
 
 use model::*;
 use std::io::{self, Write};
@@ -20,8 +23,13 @@ USAGE
   skillz enable  <name> [agent…] make it visible (default: every agent)
   skillz disable <name> [agent…] hide it (default: every agent)
   skillz rm <name> [-y]          remove it completely: hub, every agent, configs, caches
+  skillz add <what>              install: owner/repo (skills or a plugin marketplace), owner/repo@skill,
+                                 plugin@marketplace, an MCP URL, <name> <url>, or mcp <name> <command…>
+  skillz find <query…>           search skills.sh and your plugin marketplaces
+  skillz outdated                what has an update upstream
   skillz mcp add <name> <url | command [args…]>
                                  add an MCP server to every agent
+  skillz mcp status              is each MCP server up, down or waiting for a login
 
   agents: claude codex omp opencode gemini
   <name> is a skill name, a plugin id (plugin@marketplace) or mcp:<server>;
@@ -56,7 +64,7 @@ fn find<'a>(entries: &'a [Entry], name: &str) -> Result<&'a Entry, String> {
         .filter(|e| match e.kind {
             Kind::Plugin => e.plugin_name() == name,
             Kind::Mcp => mcp::name_of(&e.id) == name,
-            Kind::Skill => false,
+            Kind::Skill | Kind::Catalog => false,
         })
         .collect();
     match hits.len() {
@@ -93,6 +101,10 @@ fn main() {
         Some(c @ ("enable" | "disable")) => toggle_cmd(c == "enable", &args[1..]),
         Some("rm" | "remove") => rm(&args[1..]),
         Some("mcp") if args.get(1).map(String::as_str) == Some("add") => mcp_add(&args[2..]),
+        Some("mcp") if args.get(1).map(String::as_str) == Some("status") => mcp_status(),
+        Some("add" | "install") => add_cmd(&args[1..].join(" ")),
+        Some("find") => find_cmd(&args[1..].join(" ")),
+        Some("outdated") => outdated(),
         Some(other) => Err(io::Error::other(format!("unknown command '{other}'\n\n{HELP}"))),
     };
     if let Err(e) = res {
@@ -118,6 +130,7 @@ fn list(query: &str) -> io::Result<()> {
             Kind::Skill => "skill",
             Kind::Plugin => "plugin",
             Kind::Mcp => "mcp",
+            Kind::Catalog => "-",
         };
         print!("{:<w$}  {:<6}", e.id, kind);
         for p in &cx.agents {
@@ -209,15 +222,82 @@ fn rm(args: &[String]) -> io::Result<()> {
 fn mcp_add(args: &[String]) -> io::Result<()> {
     let name = args.first().ok_or_else(|| io::Error::other("usage: skillz mcp add <name> <url | command [args…]>"))?;
     let mut cx = Ctx::load();
-    if load_entries(&cx).iter().any(|e| e.id == format!("{}{name}", mcp::PREFIX)) {
-        return Err(io::Error::other(format!("MCP server '{name}' already exists; `skillz enable mcp:{name}` spreads it")));
-    }
-    let e = mcp::new_entry(name, &args[1..])?;
-    for p in cx.agents.clone() {
-        set(&mut cx, &e, p, true, false)?;
-        println!("● {} → {}", e.id, p.name());
-    }
+    mcp::add(&mut cx, name, &args[1..])?;
     cx.save()?;
+    println!("● mcp:{name} → {}", cx.agents.iter().map(|p| p.name()).collect::<Vec<_>>().join(", "));
     println!("restart the agents to apply; servers that use OAuth need a login in each agent");
+    Ok(())
+}
+
+fn mcp_status() -> io::Result<()> {
+    let cx = Ctx::load();
+    let servers: Vec<Entry> = mcp::load(&cx);
+    let w = servers.iter().map(|e| e.id.len()).max().unwrap_or(10);
+    std::thread::scope(|s| {
+        let jobs: Vec<_> = servers.iter().map(|e| (e, s.spawn(|| e.mcp.get(&P::Claude).or_else(|| e.mcp.values().next()).map(mcp::probe)))).collect();
+        for (e, j) in jobs {
+            let h = j.join().ok().flatten().unwrap_or(mcp::Health::Down("no definition".into()));
+            let s = match h {
+                mcp::Health::Live => "\x1b[32m● live\x1b[0m".to_string(),
+                mcp::Health::Login => "\x1b[33m● up, OAuth\x1b[0m  each agent logs in once".to_string(),
+                mcp::Health::Down(why) => format!("\x1b[31m● down\x1b[0m  {why}"),
+                mcp::Health::Checking => String::new(),
+            };
+            println!("{:<w$}  {s}", e.id);
+        }
+    });
+    Ok(())
+}
+
+/// Install anything, then spread it to every agent.
+fn add_cmd(input: &str) -> io::Result<()> {
+    let plan = add::resolve(add::parse(input).map_err(io::Error::other)?);
+    let mut cx = Ctx::load();
+    if let add::Plan::Mcp { name, target } = &plan {
+        mcp::add(&mut cx, name, target)?;
+        cx.save()?;
+        println!("● mcp:{name} added to every agent");
+        return Ok(());
+    }
+    if let add::Plan::Marketplace { repo, install: None } = &plan {
+        println!("{repo} is a plugin marketplace with several plugins: adding it; pick plugins with `skillz find` or Browse in the TUI");
+    }
+    let ok = run_cmds(&add::cmds(&plan));
+    sync_cmd(true)?;
+    if !ok {
+        return Err(io::Error::other("install failed (see above)"));
+    }
+    Ok(())
+}
+
+fn find_cmd(query: &str) -> io::Result<()> {
+    if query.trim().is_empty() {
+        return Err(io::Error::other("usage: skillz find <query…>"));
+    }
+    let cx = Ctx::load();
+    let mut hits: Vec<Entry> = add::catalog(&cx).into_iter().filter(|e| e.matches(query)).collect();
+    hits.extend(add::search_skills(&cx.hub(), query));
+    if hits.is_empty() {
+        return Err(io::Error::other(format!("nothing found for '{query}'")));
+    }
+    for e in &hits {
+        println!("{}  \x1b[2m{}\x1b[0m\n    {}", e.id, e.source, e.desc.chars().take(110).collect::<String>());
+    }
+    println!("\ninstall with: skillz add <name>");
+    Ok(())
+}
+
+fn outdated() -> io::Result<()> {
+    let cx = Ctx::load();
+    let ids = updates::check(&cx.home);
+    if ids.is_empty() {
+        println!("✓ everything is up to date");
+    }
+    for id in &ids {
+        println!("⬆ {id}");
+    }
+    if !ids.is_empty() {
+        println!("\nskillz update   (or u / U in the TUI)");
+    }
     Ok(())
 }
