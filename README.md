@@ -175,6 +175,9 @@ The screenshot is the real TUI render from a demo `$HOME` (`src/demo.rs`), expor
 
 ## Changelog
 
+**0.3.1**
+- TUI install/update (`i`, `+`, `u`, `U`) shows a cartridge-dock overlay; commands stay hidden and no Enter to return. MCP login still uses the real terminal.
+
 **0.3.0**
 - `+` installs anything from one input line: skills repos, single skills, plugin marketplaces (a marketplace with one plugin gets it installed), plugins and MCP servers. Then it syncs. Same inputs: `skillz add`.
 - Browse tab: uninstalled plugins from your marketplaces, plus skills.sh search. Multi-select install. CLI: `skillz find`.

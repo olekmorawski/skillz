@@ -1,6 +1,6 @@
 use crate::model::*;
 use crate::mcp::Health;
-use crate::{add, mcp, run_cmds, sync, updates};
+use crate::{add, mcp, run_cmds, run_cmds_quiet, sync, updates};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     layout::{Alignment, Constraint, Flex, Layout, Margin, Rect},
@@ -15,7 +15,7 @@ use std::{
     fs, io,
     sync::mpsc::{channel, Receiver, Sender},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const ACCENT: Color = Color::Rgb(217, 119, 87);
@@ -548,7 +548,7 @@ fn draw_confirm(f: &mut Frame, ids: &[&str]) {
     f.render_widget(Paragraph::new(text).wrap(Wrap { trim: true }).alignment(Alignment::Center).block(rounded("remove", BAD).padding(Padding::top(1))), r);
 }
 
-/// Hand the terminal to external commands, then come back.
+/// Interactive CLIs (MCP OAuth) still get the real terminal.
 fn run_visible(term: &mut DefaultTerminal, cmds: &[Vec<String>]) -> bool {
     ratatui::restore();
     let ok = run_cmds(cmds);
@@ -559,11 +559,164 @@ fn run_visible(term: &mut DefaultTerminal, cmds: &[Vec<String>]) -> bool {
     ok
 }
 
+const INSTALL_STEPS: [&str; 5] = [
+    "slotting the cartridge",
+    "warming the dock",
+    "lighting the agents",
+    "seating contacts",
+    "linking skills",
+];
+
+const LEDS: [Color; 5] = [
+    Color::Rgb(80, 200, 140),
+    Color::Rgb(190, 130, 220),
+    Color::White,
+    Color::Rgb(90, 165, 230),
+    ACCENT,
+];
+
+fn progress_frame(elapsed: Duration, done: Option<bool>) -> (f64, &'static str) {
+    match done {
+        Some(true) => (1.0, "seated"),
+        Some(false) => (1.0, "ejected"),
+        None => {
+            let t = elapsed.as_secs_f64();
+            let ratio = 0.92 * (1.0 - (-t / 3.5).exp());
+            (ratio, INSTALL_STEPS[((t * 0.7) as usize) % INSTALL_STEPS.len()])
+        }
+    }
+}
+
+fn cart_art(tick: u32, done: Option<bool>) -> Vec<Line<'static>> {
+    let drop = match done {
+        Some(_) => 2,
+        None => (tick / 5).min(2),
+    };
+    let z = match done {
+        Some(true) => "   Z   ",
+        Some(false) => "   x   ",
+        None => ["  ·Z·  ", "   Z   ", "  *Z*  ", "   Z   "][(tick as usize / 4) % 4],
+    };
+    let zc = if done == Some(false) { BAD } else { Color::White };
+    let lit = match done {
+        Some(true) => 5,
+        Some(false) => 0,
+        None if drop < 2 => 0,
+        None => (tick as usize / 3) % 6,
+    };
+    let cart_top = Line::from(vec![Span::raw("     "), Span::styled("╭───────╮", Style::new().fg(ACCENT))]);
+    let cart_body = Line::from(vec![
+        Span::raw("     "),
+        Span::styled("│", Style::new().fg(ACCENT)),
+        Span::styled(z.to_string(), Style::new().fg(zc).bold()),
+        Span::styled("│", Style::new().fg(ACCENT)),
+    ]);
+    let cart_bot = Line::from(vec![Span::raw("     "), Span::styled("╰───────╯", Style::new().fg(ACCENT))]);
+    let dock_top = Line::from(vec![
+        Span::raw("   "),
+        Span::styled(if drop >= 2 { "┌─┴───────┴─┐" } else { "┌───────────┐" }, Style::new().fg(DIM)),
+    ]);
+    let mut leds = vec![Span::raw("   "), Span::styled("│ ", Style::new().fg(DIM))];
+    for (i, &c) in LEDS.iter().enumerate() {
+        if i > 0 {
+            leds.push(Span::raw(" "));
+        }
+        let on = i < lit;
+        leds.push(Span::styled(if on { "●" } else { "○" }, Style::new().fg(if on { c } else { FAINT })));
+    }
+    leds.push(Span::styled(" │", Style::new().fg(DIM)));
+    let dock_bot = Line::from(vec![Span::raw("   "), Span::styled("└───────────┘", Style::new().fg(DIM))]);
+    let mut lines = Vec::with_capacity(7);
+    match drop {
+        0 => lines.extend([cart_top, cart_body, cart_bot, Line::from("")]),
+        1 => lines.extend([Line::from(""), cart_top, cart_body, cart_bot]),
+        _ => lines.extend([Line::from(""), Line::from(""), cart_top, cart_body]),
+    }
+    lines.extend([dock_top, Line::from(leds), dock_bot]);
+    lines
+}
+
+fn draw_progress(f: &mut Frame, label: &str, elapsed: Duration, done: Option<bool>) {
+    let [r] = Layout::horizontal([Constraint::Length(54)]).flex(Flex::Center).areas(f.area());
+    let [r] = Layout::vertical([Constraint::Length(16)]).flex(Flex::Center).areas(r);
+    f.render_widget(Clear, r);
+    let title: String = {
+        let t: String = label.chars().take(40).collect();
+        if label.chars().count() > 40 { format!("{t}…") } else { t }
+    };
+    let color = match done {
+        Some(true) => OK,
+        Some(false) => BAD,
+        None => ACCENT,
+    };
+    let block = rounded(&title, color).padding(Padding::new(1, 1, 0, 0));
+    let inner = block.inner(r);
+    f.render_widget(block, r);
+    let tick = (elapsed.as_millis() / 80) as u32;
+    let (ratio, step) = progress_frame(elapsed, done);
+    let [art, status, bar] = Layout::vertical([Constraint::Length(7), Constraint::Length(2), Constraint::Length(1)]).areas(inner);
+    f.render_widget(Paragraph::new(cart_art(tick, done)).alignment(Alignment::Center), art);
+    let status_line = match done {
+        Some(true) => Line::from(Span::styled("seated in the dock", Style::new().fg(OK).bold())),
+        Some(false) => Line::from(Span::styled("didn't seat", Style::new().fg(BAD).bold())),
+        None => Line::from(Span::styled(step, Style::new().fg(ACCENT))),
+    };
+    f.render_widget(Paragraph::new(status_line).alignment(Alignment::Center), status);
+    f.render_widget(
+        LineGauge::default()
+            .filled_style(Style::new().fg(color))
+            .unfilled_style(Style::new().fg(FAINT))
+            .line_set(symbols::line::THICK)
+            .label(Span::styled(format!(" {:>3}%", (ratio * 100.0).round() as u16), Style::new().fg(Color::White).bold()))
+            .ratio(ratio.clamp(0.0, 1.0)),
+        bar,
+    );
+}
+
+/// Fake cartridge-dock overlay while install/update commands run hidden.
+fn run_overlay(term: &mut DefaultTerminal, app: &mut App, cmds: &[Vec<String>], label: &str) -> bool {
+    if cmds.is_empty() {
+        return true;
+    }
+    let (tx, rx) = channel();
+    let cmds = cmds.to_vec();
+    thread::spawn(move || {
+        let _ = tx.send(run_cmds_quiet(&cmds));
+    });
+    let started = Instant::now();
+    let paint = |term: &mut DefaultTerminal, app: &mut App, elapsed: Duration, done: Option<bool>| {
+        let _ = term.draw(|f| {
+            draw(f, app);
+            draw_progress(f, label, elapsed, done);
+        });
+    };
+    let ok = loop {
+        if let Ok(v) = rx.try_recv() {
+            break v;
+        }
+        paint(term, app, started.elapsed(), None);
+        if event::poll(Duration::from_millis(80)).unwrap_or(false) {
+            let _ = event::read();
+        }
+    };
+    while started.elapsed() < Duration::from_millis(900) {
+        paint(term, app, started.elapsed(), None);
+        thread::sleep(Duration::from_millis(80));
+    }
+    paint(term, app, started.elapsed(), Some(ok));
+    thread::sleep(Duration::from_millis(280));
+    while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+        let _ = event::read();
+    }
+    ok
+}
+
 fn finish(term: &mut DefaultTerminal, app: &mut App, res: io::Result<Cmds>, ok_msg: String) {
+    let _ = term;
     let res = res.and_then(|c| app.cx.save().map(|_| c));
     match res {
         Ok(cmds) => {
-            let ok = cmds.is_empty() || run_visible(term, &cmds);
+            let ok = cmds.is_empty() || run_cmds_quiet(&cmds);
             if ok { app.ok(ok_msg) } else { app.err(format!("{ok_msg} - but a command failed")) }
         }
         Err(e) => app.err(e.to_string()),
@@ -573,7 +726,7 @@ fn finish(term: &mut DefaultTerminal, app: &mut App, res: io::Result<Cmds>, ok_m
 
 /// Run installers, then sync so the new things reach every agent.
 fn install(term: &mut DefaultTerminal, app: &mut App, cmds: Cmds, label: String) {
-    let ok = run_visible(term, &cmds);
+    let ok = run_overlay(term, app, &cmds, &format!("installing {label}"));
     app.reload();
     let r = sync::sync(&mut app.cx, true).map(|r| r.cmds);
     finish(term, app, r, if ok { format!("{label} installed · synced to every agent") } else { format!("{label}: install failed") });
@@ -592,7 +745,7 @@ fn submit_add(term: &mut DefaultTerminal, app: &mut App, input: &str) {
             app.check_health();
         }
         add::Plan::Marketplace { install: None, .. } => {
-            let ok = run_visible(term, &add::cmds(&plan));
+            let ok = run_overlay(term, app, &add::cmds(&plan), &format!("installing {input}"));
             app.reload();
             if ok {
                 app.tab = BROWSE;
@@ -781,7 +934,7 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
             }
             KeyCode::Char('U') => {
                 let cmds = sync::update_all_cmds(&app.cx);
-                let ok = run_visible(term, &cmds);
+                let ok = run_overlay(term, app, &cmds, "updating everything");
                 let r = sync::sync(&mut app.cx, true).map(|r| r.cmds);
                 finish(term, app, r, if ok { "everything updated".into() } else { "updated - some steps failed".into() });
                 app.check_updates();
@@ -797,7 +950,9 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                     app.err(format!("{label}: no update source"));
                 } else {
                     app.marked.clear();
-                    finish(term, app, Ok(cmds), format!("{label} updated"));
+                    let ok = run_overlay(term, app, &cmds, &format!("updating {label}"));
+                    app.reload();
+                    if ok { app.ok(format!("{label} updated")) } else { app.err(format!("{label} updated - but a command failed")) }
                     app.check_updates();
                 }
             }
@@ -851,5 +1006,55 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    fn buf_text(buf: &ratatui::buffer::Buffer) -> String {
+        let mut s = String::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                s.push_str(buf[(x, y)].symbol());
+            }
+            s.push('\n');
+        }
+        s
+    }
+
+    #[test]
+    fn progress_ramps_without_finishing() {
+        let (a, step) = progress_frame(Duration::ZERO, None);
+        let (b, _) = progress_frame(Duration::from_secs(2), None);
+        assert!(b > a);
+        assert!(b < 1.0);
+        assert!(INSTALL_STEPS.contains(&step));
+    }
+
+    #[test]
+    fn cart_is_seven_lines_with_z() {
+        let high = cart_art(0, None);
+        let seated = cart_art(20, None);
+        assert_eq!(high.len(), 7);
+        assert_eq!(seated.len(), 7);
+        assert!(high.iter().any(|l| l.to_string().contains('Z')));
+        assert!(seated.iter().any(|l| l.to_string().contains('┴')));
+    }
+
+    #[test]
+    fn overlay_draws_cartridge_not_commands() {
+        let mut t = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        t.draw(|f| draw_progress(f, "installing ponytail", Duration::from_millis(900), None)).unwrap();
+        let s = buf_text(t.backend().buffer());
+        assert!(s.contains('Z'), "{s}");
+        assert!(
+            s.contains("warming the dock") || s.contains("slotting") || s.contains("lighting") || s.contains("seating") || s.contains("linking"),
+            "{s}"
+        );
+        assert!(!s.contains("npx"), "{s}");
+        assert!(!s.contains("Enter to return"), "{s}");
     }
 }

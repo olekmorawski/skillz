@@ -10,7 +10,7 @@ mod updates;
 
 use model::*;
 use std::io::{self, Write};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 const HELP: &str = "skillz - one place for agent skills, plugins & MCP servers (Claude Code, Codex, omp, OpenCode, Gemini CLI)
 
@@ -37,17 +37,37 @@ USAGE
 
 /// Run commands with the terminal attached; true if all succeeded.
 pub fn run_cmds(cmds: &[Vec<String>]) -> bool {
+    exec_cmds(cmds, true)
+}
+
+/// Run commands with stdio discarded (TUI overlay). True if all succeeded.
+pub fn run_cmds_quiet(cmds: &[Vec<String>]) -> bool {
+    exec_cmds(cmds, false)
+}
+
+fn exec_cmds(cmds: &[Vec<String>], visible: bool) -> bool {
     let mut ok = true;
     for c in cmds {
-        println!("\x1b[1;38;2;217;119;87m$\x1b[0m \x1b[1m{}\x1b[0m", c.join(" "));
-        match Command::new(&c[0]).args(&c[1..]).status() {
+        if visible {
+            println!("\x1b[1;38;2;217;119;87m$\x1b[0m \x1b[1m{}\x1b[0m", c.join(" "));
+        }
+        let mut p = Command::new(&c[0]);
+        p.args(&c[1..]);
+        if !visible {
+            p.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        }
+        match p.status() {
             Ok(s) if s.success() => {}
             Ok(s) => {
-                println!("  \x1b[31m✗ exit {}\x1b[0m", s.code().unwrap_or(-1));
+                if visible {
+                    println!("  \x1b[31m✗ exit {}\x1b[0m", s.code().unwrap_or(-1));
+                }
                 ok = false;
             }
             Err(e) => {
-                println!("  \x1b[31m✗ {e}\x1b[0m");
+                if visible {
+                    println!("  \x1b[31m✗ {e}\x1b[0m");
+                }
                 ok = false;
             }
         }
@@ -300,4 +320,15 @@ fn outdated() -> io::Result<()> {
         println!("\nskillz update   (or u / U in the TUI)");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod exec_cmds_tests {
+    use super::*;
+
+    #[test]
+    fn quiet_true_and_false() {
+        assert!(run_cmds_quiet(&[vec!["true".into()]]));
+        assert!(!run_cmds_quiet(&[vec!["false".into()]]));
+    }
 }
