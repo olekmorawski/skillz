@@ -18,9 +18,10 @@ pub enum P {
     Omp,
     OpenCode,
     Gemini,
+    Pi,
 }
 
-pub const ALL: [P; 5] = [P::Claude, P::Codex, P::Omp, P::OpenCode, P::Gemini];
+pub const ALL: [P; 6] = [P::Claude, P::Codex, P::Omp, P::OpenCode, P::Gemini, P::Pi];
 
 impl P {
     pub fn name(self) -> &'static str {
@@ -30,6 +31,7 @@ impl P {
             P::Omp => "omp",
             P::OpenCode => "OpenCode",
             P::Gemini => "Gemini",
+            P::Pi => "Pi",
         }
     }
     pub fn key(self) -> &'static str {
@@ -39,6 +41,7 @@ impl P {
             P::Omp => "omp",
             P::OpenCode => "opencode",
             P::Gemini => "gemini",
+            P::Pi => "pi",
         }
     }
     pub fn parse(s: &str) -> Option<P> {
@@ -52,6 +55,7 @@ impl P {
             P::Omp => ".omp",
             P::OpenCode => ".config/opencode",
             P::Gemini => ".gemini",
+            P::Pi => ".pi/agent", // Detection also honors PI_CODING_AGENT_DIR.
         }
     }
     /// Where plugin skills get linked for agents that can't install the plugin natively.
@@ -67,6 +71,8 @@ impl P {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Vis {
+    /// Config cannot be interpreted safely; do not claim the skill is active.
+    Unknown,
     On,
     Off,
     /// Visible and the agent offers no switch for it (e.g. OpenCode v2 always loads ~/.agents/skills).
@@ -124,6 +130,7 @@ impl Entry {
 
 pub struct Ctx {
     pub home: PathBuf,
+    pub pi: crate::pi::Pi,
     pub agents: Vec<P>,
     pub codex: DocumentMut,
     pub omp_ignored: BTreeSet<String>,
@@ -166,7 +173,8 @@ pub fn has_cmd(c: &str) -> bool {
 impl Ctx {
     pub fn load() -> Ctx {
         let home = home();
-        let agents: Vec<P> = ALL.into_iter().filter(|p| home.join(p.marker()).is_dir()).collect();
+        let pi = crate::pi::Pi::load(&home, std::env::var("PI_CODING_AGENT_DIR").ok().as_deref());
+        let agents: Vec<P> = ALL.into_iter().filter(|p| if *p == P::Pi { pi.dir.is_dir() } else { home.join(p.marker()).is_dir() }).collect();
         let codex = fs::read_to_string(home.join(".codex/config.toml")).unwrap_or_default().parse().unwrap_or_default();
         let omp_ignored: BTreeSet<String> = if agents.contains(&P::Omp) && has_cmd("omp") {
             Command::new("omp")
@@ -188,6 +196,7 @@ impl Ctx {
         let mut state = read_json(&home.join(".agents/skillz.json"));
         migrate_state(&mut state);
         Ctx {
+            pi,
             omp_reg: read_json(&home.join(".omp/plugins/installed_plugins.json")),
             gemini: read_json(&home.join(".gemini/settings.json")),
             claude: read_json(&home.join(".claude/settings.json")),
@@ -210,6 +219,7 @@ impl Ctx {
     }
 
     pub fn save(&mut self) -> io::Result<()> {
+        self.pi.save()?;
         let h = self.home.clone();
         if self.dirty.contains("codex") {
             let text = self.codex.to_string();
@@ -569,6 +579,10 @@ pub fn load_entries(cx: &Ctx) -> Vec<Entry> {
                     continue;
                 }
                 P::Gemini => !gemini_off.contains(&name),
+                P::Pi => {
+                    vis.insert(p, cx.pi.visibility(&name));
+                    continue;
+                },
             };
             vis.insert(p, if on { Vis::On } else { Vis::Off });
         }
@@ -627,6 +641,7 @@ pub fn load_entries(cx: &Ctx) -> Vec<Entry> {
 
             let mut vis = BTreeMap::new();
             for &p in &cx.agents {
+                if p == P::Pi { continue; } // Pi packages/plugins are not managed here.
                 // links carry skills only; LSP/agent/hook-only plugins have nothing to share there
                 if modes.get(&p) == Some(&Mode::Links) && skills.is_empty() {
                     continue;
@@ -702,6 +717,8 @@ pub fn set(cx: &mut Ctx, e: &Entry, p: P, on: bool, remember: bool) -> io::Resul
     let h = cx.home.clone();
     let mut cmds = Vec::new();
     match (p, e.kind) {
+        (P::Pi, Kind::Plugin | Kind::Mcp) => return Err(io::Error::other("Pi support is limited to shared hub skills")),
+        (P::Pi, Kind::Skill) => cx.pi.set(&e.id, on)?,
         (_, _) if e.vis.get(&p) == Some(&Vis::Always) => {
             return Err(io::Error::other(format!("{} always loads ~/.agents/skills and has no per-skill switch", p.name())));
         }
@@ -806,6 +823,7 @@ pub fn purge(cx: &mut Ctx, e: &Entry) -> io::Result<Cmds> {
     match e.kind {
         Kind::Skill => {
             let n = &e.id;
+            if cx.agents.contains(&P::Pi) { cx.pi.forget(n)?; }
             let (hub_dir, claude_link) = (cx.hub().join(n), h.join(".claude/skills").join(n));
             if e.in_lock {
                 // npx must see the files to drop its lock entry; leftovers go after it
@@ -821,12 +839,14 @@ pub fn purge(cx: &mut Ctx, e: &Entry) -> io::Result<Cmds> {
                 h.join(".gemini/skills").join(n),
                 h.join(".config/opencode/skills").join(n),
                 h.join(".omp/agent/skills").join(n),
-                h.join(".pi/agent/skills").join(n),
+                cx.pi.dir.join("skills").join(n),
             ] {
                 remove_any(&d)?;
             }
-            codex_set_skill(&mut cx.codex, n, true);
-            cx.touch("codex");
+            if h.join(".codex/config.toml").is_file() {
+                codex_set_skill(&mut cx.codex, n, true);
+                cx.touch("codex");
+            }
             cx.omp_ignored.remove(n);
             if cx.gemini_disabled().contains(n) {
                 cx.set_gemini_disabled(n, false);

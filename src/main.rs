@@ -3,6 +3,7 @@ mod demo;
 mod add;
 mod mcp;
 mod model;
+mod pi;
 mod net;
 mod sync;
 mod ui;
@@ -31,7 +32,7 @@ USAGE
                                  add an MCP server to every agent
   skillz mcp status              is each MCP server up, down or waiting for a login
 
-  agents: claude codex omp opencode gemini
+  agents: claude codex omp opencode gemini pi
   <name> is a skill name, a plugin id (plugin@marketplace) or mcp:<server>;
   a bare plugin or server name works if unique.";
 
@@ -99,7 +100,8 @@ fn mark(v: Option<&Vis>) -> &'static str {
         Some(Vis::On) => "●",
         Some(Vis::Off) => "○",
         Some(Vis::Always) => "◆",
-        None => " ",
+        Some(Vis::Unknown) => "?",
+        None => "·",
     }
 }
 
@@ -161,7 +163,7 @@ fn list(query: &str) -> io::Result<()> {
         }
         println!();
     }
-    println!("\n● visible  ○ hidden  ◆ always visible (agent has no switch)");
+    println!("\n● visible  ○ hidden  ◆ always visible (agent has no switch)  ? unknown  · not applicable");
     Ok(())
 }
 
@@ -200,7 +202,7 @@ fn toggle_cmd(on: bool, args: &[String]) -> io::Result<()> {
     let agents: Vec<P> = if args.len() > 1 {
         args[1..].iter().map(|a| P::parse(a).ok_or_else(|| io::Error::other(format!("unknown agent '{a}'")))).collect::<io::Result<_>>()?
     } else {
-        cx.agents.iter().copied().filter(|p| e.vis.get(p) != Some(&Vis::Always)).collect()
+        cx.agents.iter().copied().filter(|p| matches!(e.vis.get(p), Some(Vis::On | Vis::Off))).collect()
     };
     let mut cmds = Vec::new();
     for p in agents {
@@ -244,7 +246,7 @@ fn mcp_add(args: &[String]) -> io::Result<()> {
     let mut cx = Ctx::load();
     mcp::add(&mut cx, name, &args[1..])?;
     cx.save()?;
-    println!("● mcp:{name} → {}", cx.agents.iter().map(|p| p.name()).collect::<Vec<_>>().join(", "));
+    println!("● mcp:{name} → {}", cx.agents.iter().filter(|p| **p != P::Pi).map(|p| p.name()).collect::<Vec<_>>().join(", "));
     println!("restart the agents to apply; servers that use OAuth need a login in each agent");
     Ok(())
 }

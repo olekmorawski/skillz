@@ -39,6 +39,7 @@ fn pcolor(p: P) -> Color {
         P::Omp => Color::Rgb(167, 139, 250),
         P::OpenCode => Color::Rgb(230, 230, 235),
         P::Gemini => Color::Rgb(66, 133, 244),
+        P::Pi => Color::Rgb(230, 180, 90),
     }
 }
 
@@ -201,6 +202,7 @@ fn dot(v: Option<&Vis>, p: P) -> Span<'static> {
         Some(Vis::On) => Span::styled("●", Style::new().fg(pcolor(p))),
         Some(Vis::Always) => Span::styled("◆", Style::new().fg(pcolor(p))),
         Some(Vis::Off) => Span::styled("○", Style::new().fg(FAINT)),
+        Some(Vis::Unknown) => Span::styled("?", Style::new().fg(DIM)),
         None => Span::styled("·", Style::new().fg(FAINT)),
     }
 }
@@ -300,9 +302,12 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     f.render_widget(Paragraph::new(search).alignment(Alignment::Right), bar);
 
     // list + details
-    let [list_area, detail_area] = Layout::horizontal([Constraint::Percentage(58), Constraint::Percentage(42)]).spacing(1).areas(body);
-    let vis = app.visible();
     let col_w: Vec<u16> = agents.iter().map(|p| p.name().len().max(3) as u16 + 1).collect();
+    // Keep agent headers intact when a sixth column is present.
+    let min_list = 18 + col_w.iter().sum::<u16>() + agents.len() as u16 + 5;
+    let list_width = (body.width * 58 / 100).max(min_list).min(body.width);
+    let [list_area, detail_area] = Layout::horizontal([Constraint::Length(list_width), Constraint::Min(0)]).spacing(1).areas(body);
+    let vis = app.visible();
     let rows = vis.iter().map(|&i| {
         let e = &app.entries[i];
         let (glyph, gc) = kind_glyph(e.kind);
@@ -455,6 +460,8 @@ fn draw_details(f: &mut Frame, app: &App, area: Rect) {
             Some(Vis::On) => ("on", pcolor(p)),
             Some(Vis::Always) => ("always (no switch in this agent)", pcolor(p)),
             Some(Vis::Off) => ("off", FAINT),
+            Some(Vis::Unknown) => ("unknown (Pi settings or filter syntax)", DIM),
+            None if p == P::Pi => ("not managed by skillz (skills only)", FAINT),
             None => ("n/a - nothing this agent can load (no skills)", FAINT),
         };
         let how = match e.modes.get(&p) {

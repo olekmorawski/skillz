@@ -61,6 +61,7 @@ pub fn to_agent(p: P, d: &Value) -> Value {
     let remote = d["url"].is_string();
     let mut m = Map::new();
     match p {
+        P::Pi => unreachable!("Pi MCP is not supported"),
         P::Claude | P::Omp => {
             for k in ["type", "command", "args", "env", "url", "headers"] {
                 put(&mut m, k, &d[k]);
@@ -187,6 +188,7 @@ fn defined(cx: &Ctx, p: P) -> BTreeMap<String, (Value, bool)> {
         v.as_object().into_iter().flatten().map(|(k, v)| (k.clone(), (v.clone(), on(k, v)))).collect()
     };
     match p {
+        P::Pi => BTreeMap::new(),
         P::Claude => {
             let mut m = pairs(&cx.state["mcp_parked"], &|_, _| false);
             m.extend(pairs(&cx.claude_json["mcpServers"], &|_, _| true));
@@ -234,7 +236,7 @@ pub fn load(cx: &Ctx) -> Vec<Entry> {
         let mut defs = BTreeMap::new();
         for &p in &cx.agents {
             // OpenCode with a JSONC config can't be read or written
-            if p == P::OpenCode && cx.opencode.is_none() {
+            if p == P::Pi || (p == P::OpenCode && cx.opencode.is_none()) {
                 continue;
             }
             let own = per[&p].get(name);
@@ -371,6 +373,7 @@ pub fn set(cx: &mut Ctx, e: &Entry, p: P, on: bool) -> io::Result<()> {
             }
             cx.touch("opencode");
         }
+        P::Pi => return Err(io::Error::other("Pi MCP is not supported")),
         P::Gemini => {
             if !cx.gemini["mcp"].is_object() {
                 cx.gemini["mcp"] = json!({});
@@ -472,11 +475,14 @@ pub fn new_entry(name: &str, target: &[String]) -> io::Result<Entry> {
 
 /// Add a new server to every agent (`skillz mcp add`, `+` in the TUI).
 pub fn add(cx: &mut Ctx, name: &str, target: &[String]) -> io::Result<()> {
+    if !cx.agents.iter().any(|p| *p != P::Pi) {
+        return Err(io::Error::other("no installed agent with MCP support (Pi MCP is not managed by skillz)"));
+    }
     if load(cx).iter().any(|e| name_of(&e.id) == name) {
         return Err(io::Error::other(format!("MCP server '{name}' already exists; `skillz enable mcp:{name}` spreads it")));
     }
     let e = new_entry(name, target)?;
-    for p in cx.agents.clone() {
+    for p in cx.agents.clone().into_iter().filter(|p| *p != P::Pi) {
         crate::model::set(cx, &e, p, true, false)?;
     }
     Ok(())
@@ -593,7 +599,7 @@ mod tests {
             json!({"type": "sse", "url": "https://x.dev/sse"}),
         ];
         for d in &defs {
-            for p in ALL {
+            for p in ALL.into_iter().filter(|p| *p != P::Pi) {
                 let back = from_agent(p, &to_agent(p, d));
                 // Codex and OpenCode only speak streamable http for remotes
                 let want = if d["type"] == "sse" && matches!(p, P::Codex | P::OpenCode) { json!({"type": "http", "url": d["url"]}) } else { d.clone() };

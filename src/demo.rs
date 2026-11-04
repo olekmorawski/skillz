@@ -138,7 +138,11 @@ fn screenshot() {
     let h = std::env::temp_dir().join("skillz-demo-home");
     fixture(&h);
     // SAFETY: single-threaded ignored test; nothing else reads HOME concurrently
-    unsafe { std::env::set_var("HOME", &h) };
+    unsafe {
+        std::env::set_var("HOME", &h);
+        std::env::set_var("PI_CODING_AGENT_DIR", h.join(".pi/agent"));
+        std::env::set_var("PATH", h.join("empty-bin")); // Do not invoke installed agent CLIs.
+    };
     let mut app = App::new();
     app.table.select(Some(2));
     let mut t = Terminal::new(TestBackend::new(132, 25)).unwrap();
@@ -149,4 +153,23 @@ fn screenshot() {
     // the demo must load like a real machine: 7 skills, 2 plugins, 2 MCP servers, all five agents
     assert_eq!(app.entries.len(), 11);
     assert_eq!(app.cx.agents.len(), 5);
+
+    // Adding Pi keeps all six columns and unsupported plugin/MCP cells usable.
+    w(&h.join(".pi/agent/settings.json"), r#"{"skills":["!brainstorming"]}"#);
+    let mut app = App::new();
+    assert_eq!(app.cx.agents.len(), 6);
+    for width in [100, 132] {
+        let mut t = Terminal::new(TestBackend::new(width, 25)).unwrap();
+        t.draw(|f| draw(f, &mut app)).unwrap();
+        let text: String = t.backend().buffer().content.iter().map(|c| c.symbol()).collect();
+        assert!(text.contains("Pi"));
+        assert!(text.contains("OpenCode"));
+        let header = t.backend().buffer().content.chunks(width as usize)
+            .map(|row| row.iter().map(|c| c.symbol()).collect::<String>())
+            .find(|line| line.contains("NAME")).unwrap();
+        for name in ["Claude", "Codex", "omp", "OpenCode", "Gemini", "Pi"] { assert!(header.contains(name), "{header}"); }
+        if let Ok(prefix) = std::env::var("SKILLZ_PI_SVG") {
+            fs::write(format!("{prefix}-{width}.svg"), svg(t.backend().buffer())).unwrap();
+        }
+    }
 }

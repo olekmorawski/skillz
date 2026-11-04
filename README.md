@@ -5,7 +5,7 @@
 # skillz
 
 **One TUI for every agent's skills, plugins and MCP servers.**
-See, switch, update and remove them across **Claude Code**, **Codex**, **omp**, **OpenCode** and **Gemini CLI** without hand-editing five config formats.
+See, switch, update and remove them across **Claude Code**, **Codex**, **omp**, **OpenCode** and **Gemini CLI** without hand-editing five config formats. **Pi** is also supported for shared skills.
 
 <img src="docs/screenshot.svg" alt="skillz TUI: skills and plugins with per-agent visibility" width="100%">
 
@@ -29,7 +29,7 @@ NAME                 Claude  Codex  omp  OpenCode  Gemini
 ⌁ playwright           ●       ●     ●      ●        ○
 ```
 
-Press `1`–`5` to switch an agent on or off for the selected row. `skillz` writes the change into that agent's own config. It doesn't keep a database and doesn't copy files.
+Press an agent's number (`1`–`6`, depending on which agents are installed) to switch it on or off for the selected row. `skillz` writes the change into that agent's own config. It doesn't keep a database and doesn't copy files.
 
 ## Install
 
@@ -64,7 +64,7 @@ Then run `skillz`.
     Gemini   → skill links in ~/.gemini/skills
 ```
 
-**Skills** live in `~/.agents/skills` (the shared location used by `npx skills`). Codex, omp, OpenCode and Gemini read that folder natively. Claude Code gets a symlink per skill.
+**Skills** live in `~/.agents/skills` (the shared location used by `npx skills`). Codex, omp, OpenCode, Gemini and Pi read that folder natively. Claude Code gets a symlink per skill.
 
 **Plugins** are installed once, through Claude Code (`/plugin`). Agents that can install the same plugin natively do so. The rest get symlinks to that one copy as `<plugin>--<skill>`. After a plugin update, `skillz sync` re-points the links.
 
@@ -77,6 +77,19 @@ Then run `skillz`.
 | **omp** | `skills.ignoredSkills` | an override entry in `~/.omp/plugins/installed_plugins.json` (Claude stays untouched) |
 | **OpenCode** | ◆ always on: OpenCode v2 always loads `~/.agents/skills` and has no per-skill switch | `plugin` list in `~/.config/opencode/opencode.json`, or links removed |
 | **Gemini CLI** | `skills.disabled` in `~/.gemini/settings.json` | links removed from `~/.gemini/skills` |
+| **Pi** | exact `-path` override in `<agent-dir>/settings.json` → `skills` | not supported |
+
+### Pi skills
+
+Pi is detected when its agent directory exists: `~/.pi/agent`, or `PI_CODING_AGENT_DIR` when set (including `~/…`). It is separate from omp.
+
+`skillz enable foo pi` / `skillz disable foo pi` manage **global shared skills in `~/.agents/skills`**. Switches only edit Pi's `settings.json`; they never move, delete or link shared skills. Other settings and filters are preserved. Run `/reload` in Pi after switching.
+
+Visibility describes Pi's **hub autoload configuration**, not a running session. Pi applies `!glob` exclusions, then exact `+path` inclusions, then exact `-path` exclusions, regardless of array order. For hub skills, relative filters use `~/.agents` as their base (e.g. `skills/foo`, not just `foo` for an exact override). Skillz writes literal absolute `SKILL.md` paths, so re-enabling a skill can override an existing glob without changing other skills.
+
+Literal exclusions and common `*`, `?`, `**` globs are understood. Complex minimatch patterns (such as braces, character classes and extglobs) show `?` when the result cannot be determined; an exact override can still resolve them. Invalid/unreadable settings also show `?` and are never overwritten. Explicit resource paths or unsupported exact filters show `?`; use `pi config` for those configurations. Symlinked settings files are not replaced.
+
+Pi-only skills, project `.pi/skills` / `.agents/skills`, package resources, name collisions and session/CLI overrides are not resolved here. Plugin and MCP rows show `·` for Pi and are not synced or managed there; Pi packages are not discovered. `rm` remains a **global removal**, not a Pi-only disable; it removes matching exact Pi overrides but leaves general glob filters intact.
 
 ### MCP servers
 
@@ -98,12 +111,12 @@ Choices you make are remembered in `~/.agents/skillz.json`, so `skillz sync` nev
 
 | Key | Action |
 |---|---|
-| `1` … `5` | switch the selected row for that agent (numbers match the cards at the top) |
+| `1` … `6` | switch the selected row for that agent (numbers match the cards at the top) |
 | `+` | add anything: `owner/repo`, `owner/repo@skill`, `plugin@marketplace`, an MCP URL, `name <url>` or `mcp name cmd…`; it installs, then syncs to every agent |
 | `i` / `enter` | in **Browse**: install the selected (or every marked) row |
 | `o` | on an MCP server: run the OAuth logins agents offer in their CLI (Codex, OpenCode) and show how the rest log in |
 | `c` | check again: updates upstream and MCP server status |
-| `space` | select / unselect the row; `1`–`5`, `a`, `u` and `d` then act on every selected row |
+| `space` | select / unselect the row; agent numbers, `a`, `u` and `d` then act on every selected row |
 | `*` | select every row shown, e.g. after a search (again to unselect); `esc` clears the selection |
 | `a` | all agents on, or all off if they're already all on |
 | `u` / `U` | update the selected row / update everything |
@@ -114,7 +127,7 @@ Choices you make are remembered in `~/.agents/skillz.json`, so `skillz sync` nev
 | `↑↓` `j k` `g G` `PgUp PgDn` | move |
 | `r` / `q` | reload / quit |
 
-Symbols: `◇` skill · `▣` plugin · `⌁` MCP server · `↓` available to install · `⬆` update available · `●` visible · `○` hidden · `◆` always visible (the agent has no switch) · `·` doesn't apply (e.g. an LSP-only plugin has nothing Gemini can load) · `⚠` duplicate.
+Symbols: `◇` skill · `▣` plugin · `⌁` MCP server · `↓` available to install · `⬆` update available · `●` visible · `○` hidden · `◆` always visible (the agent has no switch) · `·` doesn't apply (e.g. an LSP-only plugin has nothing Gemini can load) · `?` unknown configuration state · `⚠` duplicate.
 
 ## CLI
 
@@ -162,7 +175,7 @@ The same plugin from two marketplaces, or a hub skill that a plugin also ships, 
 - OpenCode v2 offers no way to hide a single skill that comes from `~/.agents/skills`, so those rows show `◆`.
 - Plugins that only ship LSP servers, agents or hooks show `·` for Gemini and OpenCode, because those agents can only load a plugin's skills.
 - `skillz` only edits the keys it owns. Claude's `settings.json`, `~/.claude.json` and Gemini's `settings.json` are re-read before writing, so other settings survive. `~/.claude.json` is replaced atomically, and if it can't be read the write is skipped rather than risk the file. An `opencode.json` with comments (JSONC) is left alone and you get a message instead.
-- An agent column appears when its home exists: `~/.claude`, `~/.codex`, `~/.omp`, `~/.config/opencode`, `~/.gemini`.
+- An agent column appears when its home exists: `~/.claude`, `~/.codex`, `~/.omp`, `~/.config/opencode`, `~/.gemini`, or Pi's agent directory.
 
 ## Development
 
